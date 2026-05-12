@@ -3,11 +3,6 @@
 
 {% block page_styles %}
 <style>
-  .modality-label {
-    display:inline-flex; align-items:center; gap:6px; font-size:11px;
-    color:var(--text-secondary); background:var(--bg-surface);
-    border:1px solid var(--border); border-radius:6px; padding:4px 10px;
-  }
   .locked-overlay { text-align:center; padding:40px 20px; color:var(--text-tertiary); }
   .locked-overlay p { font-size:13px; line-height:1.6; max-width:320px; margin:0 auto; }
   .action-row { display:flex; gap:8px; margin-top:16px; justify-content:flex-end; }
@@ -18,7 +13,7 @@
   @media (max-width:700px) { .suggestions-grid { grid-template-columns:1fr; } }
   .suggestion-card {
     border:1px solid var(--border); border-radius:10px; padding:12px 14px;
-    background:var(--bg-primary);
+    background:var(--bg-surface);
   }
   .suggestion-num { font-size:10px; font-weight:600; color:var(--text-orange); letter-spacing:.06em; margin-bottom:5px; }
   .suggestion-title { font-size:12px; font-weight:500; color:var(--text-primary); margin-bottom:5px; }
@@ -28,16 +23,14 @@
     animation:skeleton-pulse 1.4s ease-in-out infinite; }
   @keyframes skeleton-pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
 
-  /* Section writing area */
-  .section-label {
-    font-size:11px; font-weight:600; color:var(--text-secondary);
-    text-transform:uppercase; letter-spacing:.06em; margin-bottom:6px;
+  #writing-area {
+    width:100%; min-height:480px; resize:vertical;
+    font-size:14px; line-height:1.75; font-family:inherit;
+    padding:16px; border:1px solid var(--border); border-radius:8px;
+    background:var(--bg-primary); color:var(--text-primary);
+    outline:none;
   }
-  .workspace-note {
-    background:var(--bg-surface); border-left:3px solid var(--accent);
-    border-radius:0 8px 8px 0; padding:10px 14px; font-size:12px;
-    color:var(--text-secondary); line-height:1.6; margin-bottom:14px;
-  }
+  #writing-area:focus { border-color:var(--accent); }
 </style>
 {% endblock %}
 
@@ -64,9 +57,24 @@
 {% endblock %}
 
 {% block content %}
+{% set modality_icons = {
+  "critical analysis": "ti-file-text",
+  "podcast script": "ti-microphone",
+  "interactive game design": "ti-device-gamepad",
+  "presentation outline": "ti-presentation",
+  "video script": "ti-video"
+} %}
+
 <div style="margin-bottom:16px;">
-  <h1 class="page-title">Assignment</h1>
-  <div class="page-sub">{{ course.name }} &middot; {{ assignment.title }}</div>
+  <h1 class="page-title">{{ assignment.title }}</h1>
+  <div class="page-sub" style="display:flex;align-items:center;gap:6px;">
+    {{ course.name }}
+    {% if assignment.modality %}
+    &middot;
+    <i class="ti {{ modality_icons.get(assignment.modality, 'ti-file-text') }}" style="font-size:13px;"></i>
+    {{ assignment.modality | title }}
+    {% endif %}
+  </div>
 </div>
 
 {% if not unlocked %}
@@ -87,31 +95,11 @@
 
 {% else %}
 
-{% set modality_icons = {
-  "critical analysis": "ti-file-text",
-  "podcast script": "ti-microphone",
-  "interactive game design": "ti-device-gamepad",
-  "presentation outline": "ti-presentation",
-  "video script": "ti-video"
-} %}
-
-<!-- Deliverable format badge -->
-<div class="card" style="margin-bottom:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-  <div style="font-size:12px;font-weight:500;color:var(--text-secondary);flex-shrink:0;">Deliverable format</div>
-  <div class="modality-label">
-    <i class="ti {{ modality_icons.get(assignment.modality, 'ti-file-text') }}" style="font-size:14px;"></i>
-    {{ assignment.modality | title if assignment.modality else 'Not set' }}
-  </div>
-  {% if assignment.instructions %}
-  <div style="font-size:11px;color:var(--text-tertiary);flex:1;min-width:200px;">{{ assignment.instructions }}</div>
-  {% endif %}
-</div>
-
-<!-- Suggestion cards — loaded asynchronously -->
-<div id="suggestions-wrap" style="margin-bottom:12px;">
-  <div class="card">
+<!-- Suggestion cards — starting points only, not content to copy -->
+<div id="suggestions-wrap" style="margin-bottom:16px;">
+  <div class="card" style="background:var(--bg-surface);">
     <div style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;">
-      Suggested starting points based on your conversation
+      Suggested starting points from your conversation
     </div>
     <div style="font-size:11px;color:var(--text-tertiary);margin-bottom:10px;">
       Based on threads you introduced — not what AI said. Use these as prompts, not content to copy.
@@ -129,21 +117,12 @@
 </div>
 
 <!-- Writing workspace -->
-<div class="workspace-note">
-  This is your analysis. Use your conversation with AI as a thinking partner, but every idea here should be yours.
+<div class="card">
+  <div style="font-size:11px;color:var(--text-tertiary);margin-bottom:12px;font-style:italic;">
+    This is your analysis. Use your conversation with AI as a thinking partner, but every word here should be yours.
+  </div>
+  <textarea id="writing-area" rows="20">{{ existing_output.content if existing_output else '' }}</textarea>
 </div>
-
-{% for section in sections %}
-<div class="card" style="margin-bottom:10px;">
-  <div class="section-label">{{ section.title }}</div>
-  <textarea
-    id="section-{{ section.id }}"
-    data-section="{{ section.id }}"
-    rows="7"
-    placeholder="{{ section.placeholder }}"
-  >{{ (existing_output.content_sections or {}).get(section.id, '') if existing_output else '' }}</textarea>
-</div>
-{% endfor %}
 
 <div class="action-row">
   <span class="save-status" id="save-status"></span>
@@ -195,14 +174,9 @@
     const statusEl = document.getElementById('save-status');
     errorEl.style.display = 'none';
 
-    const sections = {};
-    document.querySelectorAll('[data-section]').forEach(el => {
-      sections[el.dataset.section] = el.value.trim();
-    });
-
-    const hasContent = Object.values(sections).some(v => v.length > 0);
-    if (!hasContent) {
-      errorEl.textContent = 'Please write at least one section before saving.';
+    const content = document.getElementById('writing-area').value.trim();
+    if (!content) {
+      errorEl.textContent = 'Please write something before saving.';
       errorEl.style.display = 'block';
       return;
     }
@@ -211,12 +185,12 @@
       const resp = await fetch('{{ url_for("student.assignment") }}', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sections }),
+        body: JSON.stringify({ content }),
       });
       const data = await resp.json();
       if (!resp.ok) throw new Error(data.error || 'Save failed');
       statusEl.style.display = 'inline';
-      statusEl.textContent = isSubmit ? '\u2713 Submitted' : '\u2713 Saved';
+      statusEl.textContent = isSubmit ? '✓ Submitted' : '✓ Saved';
       setTimeout(() => { statusEl.style.display = 'none'; }, 3000);
     } catch (err) {
       errorEl.textContent = err.message;

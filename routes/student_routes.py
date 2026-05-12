@@ -1,9 +1,11 @@
+import json
 from datetime import datetime
 
 from flask import Blueprint, jsonify, redirect, render_template, request, session, url_for
 from extensions import db
-from models.models import Assignment, Course, InstructorFeedback, Output, PromptExchange, Reflection, ReflectionConfig, Student
+from models.models import Assignment, Course, InstructorFeedback, Output, PromptExchange, Reflection, ReflectionConfig, SessionSummary, Student
 from services.ai_service import detect_concept_usage, get_ai_response, suggest_discussion_points
+from services.archetype_service import ARCHETYPES, build_system_prompt, generate_session_summary
 from config import MODALITY_SECTIONS, DEFAULT_REFLECTION_QUESTIONS
 
 student_bp = Blueprint("student", __name__, url_prefix="/student")
@@ -76,32 +78,23 @@ def prompting():
             if not student_message:
                 return jsonify({"error": "Message cannot be empty."}), 400
 
-            # Force SQLAlchemy to reload all objects from DB — prevents stale cache
+            # do not cache this query — must be rebuilt fresh on every request
             db.session.expire_all()
-            # Re-fetch assignment and course fresh from DB on every POST
             fresh_assignment = Assignment.query.get(assignment.id)
             fresh_course = Course.query.get(course.id)
-
-            print("--- CO-INTEL DEBUG ---", flush=True)
-            print("ASSIGNMENT TITLE:", fresh_assignment.title, flush=True)
-            print("INSTRUCTIONS:", fresh_assignment.instructions, flush=True)
-            print("CONCEPTS:", fresh_course.required_concepts, flush=True)
-            print("OBJECTIVE:", fresh_course.learning_objective, flush=True)
-            print("----------------------", flush=True)
 
             detection = detect_concept_usage(student_message, fresh_course.required_concepts)
             concepts_applied = detection.get("concepts_applied", [])
             has_pushback = bool(detection.get("has_pushback", False))
 
             history = _build_history(exchanges)
+            exchange_count_before = len(exchanges)
+            system_prompt = build_system_prompt(fresh_assignment, fresh_course, exchange_count_before)
 
             ai_text = get_ai_response(
                 student_message=student_message,
                 conversation_history=history,
-                course_concepts=fresh_course.required_concepts,
-                learning_objective=fresh_course.learning_objective,
-                assignment_title=fresh_assignment.title,
-                instructions=fresh_assignment.instructions or "",
+                system_prompt=system_prompt,
             )
 
             exchange_number = len(exchanges) + 1
@@ -148,6 +141,19 @@ def prompting():
         student_id=student.id, assignment_id=assignment.id
     ).first()
 
+    archetype_key = getattr(assignment, "archetype", None) or "challenger"
+    archetype_data = ARCHETYPES.get(archetype_key, ARCHETYPES["challenger"])
+
+    exchange_count = len(exchanges)
+    phase_1_end = getattr(assignment, "phase_1_end", 3) or 3
+    phase_2_end = getattr(assignment, "phase_2_end", 6) or 6
+    if exchange_count <= phase_1_end:
+        current_phase = 1
+    elif exchange_count <= phase_2_end:
+        current_phase = 2
+    else:
+        current_phase = 3
+
     return render_template(
         "student/prompting.html",
         student=student,
@@ -156,12 +162,14 @@ def prompting():
         exchanges=exchanges,
         required_concepts=course.required_concepts,
         concepts_used=sorted(all_concepts_used),
-        exchange_count=len(exchanges),
+        exchange_count=exchange_count,
         pushback_count=pushback_count,
         min_exchanges=course.min_exchanges,
         has_output=has_output,
         has_reflection=has_reflection,
         feedback=feedback,
+        archetype_data=archetype_data,
+        current_phase=current_phase,
     )
 
 
@@ -177,29 +185,20 @@ def assignment():
         student_id=student.id, assignment_id=assignment.id
     ).first()
 
-    sections = _get_sections(assignment)
-
     if request.method == "POST":
         data = request.get_json(silent=True) or {}
-        raw_sections = data.get("sections", {})
+        content = data.get("content", "").strip()
 
-        # Validate at least one section has content
-        if not any(v.strip() for v in raw_sections.values()):
-            return jsonify({"error": "Please write at least one section before saving."}), 400
+        if not content:
+            return jsonify({"error": "Please write something before saving."}), 400
 
         modality = assignment.modality or ""
-        joined_content = "\n\n".join(
-            f"{s['title']}\n{raw_sections.get(s['id'], '')}"
-            for s in sections
-            if raw_sections.get(s["id"], "").strip()
-        )
 
         if existing_output:
             existing_output.modality = modality
-            existing_output.content = joined_content
-            existing_output.content_sections = raw_sections
+            existing_output.content = content
+            existing_output.content_sections = None
             existing_output.submitted_at = datetime.utcnow()
-            # Invalidate cached analysis when content changes
             existing_output.analysis_json = None
             existing_output.analysis_generated_at = None
         else:
@@ -207,8 +206,7 @@ def assignment():
                 student_id=student.id,
                 assignment_id=assignment.id,
                 modality=modality,
-                content=joined_content,
-                content_sections=raw_sections,
+                content=content,
                 submitted_at=datetime.utcnow(),
             )
             db.session.add(existing_output)
@@ -222,11 +220,32 @@ def assignment():
         assignment=assignment,
         course=course,
         existing_output=existing_output,
-        sections=sections,
         exchange_count=exchange_count,
         min_exchanges=course.min_exchanges,
         unlocked=exchange_count >= course.min_exchanges,
     )
+
+
+@student_bp.route("/session-summary")
+def session_summary():
+    student, assignment, course = _get_context()
+    if student is None:
+        return jsonify({"error": "Student not found."}), 404
+
+    cached = SessionSummary.query.filter_by(
+        student_id=student.id, assignment_id=assignment.id
+    ).first()
+    if cached:
+        try:
+            return jsonify(json.loads(cached.summary_json))
+        except Exception:
+            pass
+
+    try:
+        result = generate_session_summary(student.id, assignment.id)
+        return jsonify(result)
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 502
 
 
 @student_bp.route("/assignment/suggestions")

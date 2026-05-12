@@ -16,10 +16,9 @@
   .pill-depth-surface  { background:var(--bg-surface);    color:var(--text-secondary);  }
   .pill-depth-pending  { background:var(--bg-surface);    color:var(--text-tertiary);   }
 
-  /* Config section */
   .cfg-field { margin-bottom:10px; }
   .cfg-label { font-size:11px; color:var(--text-tertiary); display:block; margin-bottom:4px; }
-  .cfg-select, .cfg-textarea, .cfg-input {
+  .cfg-textarea, .cfg-input {
     width:100%; font-size:12px; padding:6px 8px;
     border:1px solid var(--border); border-radius:6px;
     background:var(--bg-primary); color:var(--text-primary);
@@ -27,15 +26,39 @@
   }
   .cfg-textarea { resize:vertical; }
 
-  /* Section editor */
-  .section-editor { margin-top:14px; }
-  .section-editor-label { font-size:11px; font-weight:600; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.05em; margin-bottom:8px; }
-  .section-row-edit {
-    border:1px solid var(--border); border-radius:8px; padding:10px 12px;
-    margin-bottom:6px; background:var(--bg-surface);
+  .section-divider {
+    border:none; border-top:1px solid var(--border); margin:20px 0;
   }
-  .section-row-edit .row-num { font-size:10px; font-weight:600; color:var(--text-orange); margin-bottom:6px; }
-  .section-field-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .section-heading {
+    display:flex; align-items:center; gap:8px;
+    font-size:12px; font-weight:500; color:var(--text-secondary); margin-bottom:14px;
+  }
+
+  /* Archetype cards */
+  .archetype-card {
+    border:1px solid var(--border); border-radius:10px; padding:12px 14px;
+    background:var(--bg-surface); cursor:pointer; transition:border-color .15s, background .15s;
+  }
+  .archetype-card:hover { background:var(--bg-primary); }
+  .archetype-card.selected { border-color:var(--accent); background:var(--bg-orange-light); }
+  .archetype-card-name { font-size:12px; font-weight:500; color:var(--text-primary); margin-bottom:4px; }
+  .archetype-card.selected .archetype-card-name { color:var(--text-orange); }
+  .archetype-card-desc { font-size:11px; color:var(--text-secondary); line-height:1.55; }
+
+  .segmented-ctrl {
+    display:inline-flex; background:var(--bg-surface);
+    border:1px solid var(--border); border-radius:8px; padding:2px; width:100%;
+  }
+  .seg-btn {
+    flex:1; padding:6px 8px; border-radius:6px; border:none;
+    background:transparent; font-size:12px; color:var(--text-secondary);
+    cursor:pointer; font-family:inherit; transition:background .12s, color .12s;
+  }
+  .seg-btn:hover { color:var(--text-primary); }
+  .seg-btn.active {
+    background:var(--bg-primary); border:1px solid var(--border);
+    color:var(--text-primary); font-weight:500;
+  }
 </style>
 {% endblock %}
 
@@ -84,37 +107,123 @@
   </div>
 </div>
 
-<!-- Assignment configuration -->
+<!-- Assignment configuration card -->
 <div class="card" style="margin-bottom:12px;">
-  <div style="font-size:12px;font-weight:500;color:var(--text-secondary);margin-bottom:12px;">Assignment configuration</div>
+
+  <!-- Section 1: Assignment content -->
+  <div class="section-heading">Assignment content</div>
 
   <div class="cfg-field">
-    <label class="cfg-label">Deliverable format</label>
-    <select id="cfg-modality" class="cfg-select" onchange="onModalityChange(this.value)">
-      <option value="critical analysis"{% if assignment.modality == 'critical analysis' %} selected{% endif %}>Critical analysis</option>
-      <option value="podcast script"{% if assignment.modality == 'podcast script' %} selected{% endif %}>Podcast script</option>
-      <option value="interactive game design"{% if assignment.modality == 'interactive game design' %} selected{% endif %}>Interactive game design</option>
-      <option value="presentation outline"{% if assignment.modality == 'presentation outline' %} selected{% endif %}>Presentation outline</option>
-      <option value="video script"{% if assignment.modality == 'video script' %} selected{% endif %}>Video script</option>
-    </select>
+    <label class="cfg-label">Assignment brief</label>
+    <textarea id="cfg-instructions" class="cfg-textarea" rows="8"
+      placeholder="Write your assignment instructions here. Describe the task, the topic options, and what students should do. Students will see this before they start their conversation.">{{ assignment.instructions or '' }}</textarea>
   </div>
 
+  <div style="display:flex;align-items:center;gap:10px;">
+    <button class="btn btn-primary" onclick="saveBrief()">Save assignment brief</button>
+    <span id="brief-status" style="display:none;font-size:11px;color:var(--pill-green-text);">&#10003; Assignment brief saved</span>
+    <span id="brief-error" style="display:none;font-size:11px;color:var(--text-orange);"></span>
+  </div>
+
+  <!-- Divider -->
+  <hr class="section-divider" />
+
+  <!-- Section 2: AI configuration -->
+  <div class="section-heading">
+    AI configuration
+    {% set archetype_names = {
+      'challenger':     'The Challenger',
+      'prober':         'The Prober',
+      'design_thinker': 'The Design Thinker',
+      'narrative_coach':'The Narrative Coach',
+    } %}
+    <span id="active-archetype-pill" class="pill pill-orange" style="font-size:10px;">
+      Currently: {{ archetype_names.get(assignment.archetype or 'challenger', 'The Challenger') }}
+    </span>
+  </div>
+
+  <!-- Archetype selector -->
   <div class="cfg-field">
-    <label class="cfg-label">Assignment instructions</label>
-    <textarea id="cfg-instructions" class="cfg-textarea" rows="4" placeholder="Write your assignment instructions here. Describe the task, the topic options, and what you expect students to do. Students will see this before they start their conversation.">{{ assignment.instructions or '' }}</textarea>
+    <label class="cfg-label">AI archetype</label>
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;" id="archetype-grid">
+      {% set archetypes = [
+        ('challenger',     'The Challenger',      'Takes opposing positions and offers arguments with deliberate weaknesses for you to find and refute.'),
+        ('prober',         'The Prober',          'Draws out your thinking through questioning only — never contributes content or takes positions.'),
+        ('design_thinker', 'The Design Thinker',  'Generative and expansive in early phases, convergent and decision-focused in later phases.'),
+        ('narrative_coach','The Narrative Coach',  'Focuses on voice, structure, and editorial choices — never evaluates arguments logically.'),
+      ] %}
+      {% for val, name, desc in archetypes %}
+      <div class="archetype-card{% if assignment.archetype == val or (not assignment.archetype and val == 'challenger') %} selected{% endif %}"
+           data-archetype="{{ val }}" data-name="{{ name }}" onclick="selectArchetype('{{ val }}', '{{ name }}')">
+        <div class="archetype-card-name">{{ name }}</div>
+        <div class="archetype-card-desc">{{ desc }}</div>
+      </div>
+      {% endfor %}
+    </div>
   </div>
 
-  <!-- Section editor -->
-  <div class="section-editor">
-    <div class="section-editor-label">Assignment structure</div>
-    <div id="sections-container"></div>
+  <!-- Contribution level -->
+  <div class="cfg-field">
+    <label class="cfg-label">AI contribution level</label>
+    <div class="segmented-ctrl" id="contrib-ctrl">
+      {% for val, label, desc in [
+        ('guide_only',       'Guide only',       'AI asks questions only — no content or positions'),
+        ('thinking_partner', 'Thinking partner', 'AI contributes arguments for the student to evaluate'),
+        ('collaborator',     'Collaborator',     'AI contributes generously — student evaluates and builds'),
+      ] %}
+      <button class="seg-btn{% if assignment.contribution_level == val or (not assignment.contribution_level and val == 'thinking_partner') %} active{% endif %}"
+              data-value="{{ val }}" onclick="selectContrib('{{ val }}')" title="{{ desc }}">{{ label }}</button>
+      {% endfor %}
+    </div>
   </div>
 
-  <div style="display:flex;align-items:center;gap:10px;margin-top:12px;">
-    <button class="btn btn-primary" onclick="saveAssignmentConfig()">Save changes</button>
-    <span id="cfg-status" style="display:none;font-size:11px;color:var(--pill-green-text);">&#10003; Saved</span>
-    <span id="cfg-error" style="display:none;font-size:11px;color:var(--text-orange);"></span>
+  <!-- Behavioral emphasis -->
+  <div class="cfg-field">
+    <label class="cfg-label">Behavioral emphasis</label>
+    <div class="segmented-ctrl" id="emphasis-ctrl">
+      {% for val, label, desc in [
+        ('supportive', 'Supportive', 'Gentler and more encouraging within the archetype role'),
+        ('balanced',   'Balanced',   'The default — persistent but respectful'),
+        ('demanding',  'Demanding',  'Uncompromising — pushes hard on every weakness'),
+      ] %}
+      <button class="seg-btn{% if assignment.behavioral_emphasis == val or (not assignment.behavioral_emphasis and val == 'balanced') %} active{% endif %}"
+              data-value="{{ val }}" onclick="selectEmphasis('{{ val }}')" title="{{ desc }}">{{ label }}</button>
+      {% endfor %}
+    </div>
   </div>
+
+  <!-- Phase transitions -->
+  <div class="cfg-field" style="display:flex;gap:12px;">
+    <div style="flex:1;">
+      <label class="cfg-label">Phase 1 ends after exchange</label>
+      <input type="number" id="cfg-phase1" class="cfg-input" min="1" max="20"
+             value="{{ assignment.phase_1_end or 3 }}" />
+    </div>
+    <div style="flex:1;">
+      <label class="cfg-label">Phase 2 ends after exchange</label>
+      <input type="number" id="cfg-phase2" class="cfg-input" min="1" max="20"
+             value="{{ assignment.phase_2_end or 6 }}" />
+    </div>
+  </div>
+
+  <!-- Supplementary instructions -->
+  <div class="cfg-field">
+    <label class="cfg-label">Additional AI instructions <span style="color:var(--text-tertiary);font-weight:400;">(optional)</span></label>
+    <textarea id="cfg-supplementary" class="cfg-textarea" rows="3" maxlength="300"
+              placeholder="Add specific behavioral guidance here. For example: always ask the student to name a specific example before moving to a theoretical claim."
+              oninput="updateCharCount(this)">{{ assignment.supplementary_instructions or '' }}</textarea>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;">
+      <div style="font-size:11px;color:var(--text-tertiary);">These instructions extend the archetype — they do not replace it.</div>
+      <div id="supp-char-count" style="font-size:10px;color:var(--text-tertiary);">{{ (assignment.supplementary_instructions or '') | length }}/300</div>
+    </div>
+  </div>
+
+  <div style="display:flex;align-items:center;gap:10px;margin-top:4px;">
+    <button class="btn btn-primary" onclick="saveAiConfig()">Save AI configuration</button>
+    <span id="ai-status" style="display:none;font-size:11px;color:var(--pill-green-text);">&#10003; AI configuration saved</span>
+    <span id="ai-error" style="display:none;font-size:11px;color:var(--text-orange);"></span>
+  </div>
+
 </div>
 
 <!-- Reflection questions configuration -->
@@ -169,71 +278,101 @@
 
 {% block page_scripts %}
 <script>
-  const MODALITY_SECTIONS = {{ sections_defaults | tojson }};
-  const savedSections = {{ sections | tojson }};
+  const SAVE_BRIEF_URL   = '{{ url_for("instructor.save_brief",    assignment_id=assignment.id) }}';
+  const SAVE_AI_URL      = '{{ url_for("instructor.save_ai_config", assignment_id=assignment.id) }}';
 
-  function renderSections(sectionsArr) {
-    const container = document.getElementById('sections-container');
-    container.innerHTML = sectionsArr.map((s, i) => `
-      <div class="section-row-edit" data-id="${escHtml(s.id)}">
-        <div class="row-num">SECTION ${i + 1}</div>
-        <div class="section-field-grid">
-          <div>
-            <label class="cfg-label">Title</label>
-            <input type="text" class="cfg-input section-title" value="${escHtml(s.title)}" />
-          </div>
-          <div>
-            <label class="cfg-label">Placeholder text</label>
-            <input type="text" class="cfg-input section-placeholder" value="${escHtml(s.placeholder)}" />
-          </div>
-        </div>
-      </div>
-    `).join('');
+  let selectedArchetype = document.querySelector('.archetype-card.selected')?.dataset.archetype || 'challenger';
+  let selectedContrib   = document.querySelector('#contrib-ctrl .seg-btn.active')?.dataset.value || 'thinking_partner';
+  let selectedEmphasis  = document.querySelector('#emphasis-ctrl .seg-btn.active')?.dataset.value || 'balanced';
+
+  function selectArchetype(val, name) {
+    selectedArchetype = val;
+    document.querySelectorAll('.archetype-card').forEach(c => {
+      c.classList.toggle('selected', c.dataset.archetype === val);
+    });
   }
 
-  function onModalityChange(modality) {
-    renderSections(MODALITY_SECTIONS[modality] || []);
+  function selectContrib(val) {
+    selectedContrib = val;
+    document.querySelectorAll('#contrib-ctrl .seg-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.value === val);
+    });
   }
 
-  function escHtml(str) {
-    return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  function selectEmphasis(val) {
+    selectedEmphasis = val;
+    document.querySelectorAll('#emphasis-ctrl .seg-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.value === val);
+    });
   }
 
-  function collectSections() {
-    const rows = document.querySelectorAll('.section-row-edit');
-    return Array.from(rows).map(row => ({
-      id: row.dataset.id,
-      title: row.querySelector('.section-title').value.trim(),
-      placeholder: row.querySelector('.section-placeholder').value.trim(),
-    }));
+  function updateCharCount(el) {
+    document.getElementById('supp-char-count').textContent = `${el.value.length}/300`;
   }
 
-  async function saveAssignmentConfig() {
-    const modality     = document.getElementById('cfg-modality').value;
-    const instructions = document.getElementById('cfg-instructions').value.trim();
-    const sections     = collectSections();
-    const statusEl     = document.getElementById('cfg-status');
-    const errorEl      = document.getElementById('cfg-error');
-    statusEl.style.display = 'none';
-    errorEl.style.display  = 'none';
-    try {
-      const resp = await fetch('{{ url_for("instructor.assignment_config") }}', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ modality, instructions, sections_config: sections }),
-      });
-      const data = await resp.json();
-      if (!resp.ok) throw new Error(data.error || 'Save failed');
-      statusEl.style.display = 'inline';
-      setTimeout(() => { statusEl.style.display = 'none'; }, 3000);
-    } catch (err) {
-      errorEl.textContent   = err.message;
-      errorEl.style.display = 'inline';
+  function showStatus(statusId, errorId, msg, isError) {
+    const s = document.getElementById(statusId);
+    const e = document.getElementById(errorId);
+    s.style.display = 'none';
+    e.style.display = 'none';
+    if (isError) {
+      e.textContent = msg;
+      e.style.display = 'inline';
+    } else {
+      s.style.display = 'inline';
+      setTimeout(() => { s.style.display = 'none'; }, 3000);
     }
   }
 
-  // Init: render saved sections (or defaults for current modality)
-  renderSections(savedSections.length ? savedSections : (MODALITY_SECTIONS[document.getElementById('cfg-modality').value] || []));
+  async function saveBrief() {
+    const instructions = document.getElementById('cfg-instructions').value.trim();
+    try {
+      const resp = await fetch(SAVE_BRIEF_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ instructions }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || 'Save failed');
+      showStatus('brief-status', 'brief-error', '', false);
+    } catch (err) {
+      showStatus('brief-status', 'brief-error', err.message, true);
+    }
+  }
+
+  async function saveAiConfig() {
+    const phase_1_end       = parseInt(document.getElementById('cfg-phase1').value, 10) || 3;
+    const phase_2_end       = parseInt(document.getElementById('cfg-phase2').value, 10) || 6;
+    const supplementary     = document.getElementById('cfg-supplementary').value.trim();
+    try {
+      const resp = await fetch(SAVE_AI_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          archetype:                 selectedArchetype,
+          contribution_level:        selectedContrib,
+          behavioral_emphasis:       selectedEmphasis,
+          phase_1_end,
+          phase_2_end,
+          supplementary_instructions: supplementary,
+        }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || 'Save failed');
+      showStatus('ai-status', 'ai-error', '', false);
+      // Update the active archetype pill
+      const nameMap = {
+        challenger:     'The Challenger',
+        prober:         'The Prober',
+        design_thinker: 'The Design Thinker',
+        narrative_coach:'The Narrative Coach',
+      };
+      const pill = document.getElementById('active-archetype-pill');
+      if (pill) pill.textContent = `Currently: ${nameMap[selectedArchetype] || selectedArchetype}`;
+    } catch (err) {
+      showStatus('ai-status', 'ai-error', err.message, true);
+    }
+  }
 
   async function saveReflectionConfig() {
     const statusEl = document.getElementById('rq-status');

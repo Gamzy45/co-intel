@@ -118,7 +118,6 @@ def dashboard():
     deep_count = sum(1 for r in rows if r["depth_label"] == "deep")
     reflection_count = Reflection.query.filter_by(assignment_id=assignment.id).count()
 
-    sections = _get_sections(assignment)
     reflection_config = _get_reflection_config(assignment.id)
 
     return render_template(
@@ -130,11 +129,38 @@ def dashboard():
         avg_exchanges=avg_exchanges,
         deep_count=deep_count,
         reflection_count=reflection_count,
-        sections=sections,
-        sections_defaults=MODALITY_SECTIONS,
         reflection_config=reflection_config,
         default_questions=DEFAULT_REFLECTION_QUESTIONS,
     )
+
+
+@instructor_bp.route("/assignment/<int:assignment_id>/save-brief", methods=["POST"])
+def save_brief(assignment_id):
+    assignment = Assignment.query.get_or_404(assignment_id)
+    data = request.get_json(silent=True) or {}
+    assignment.instructions = data.get("instructions", "").strip()
+    db.session.commit()
+    return jsonify({"success": True, "message": "Assignment brief saved"})
+
+
+@instructor_bp.route("/assignment/<int:assignment_id>/save-ai-config", methods=["POST"])
+def save_ai_config(assignment_id):
+    assignment = Assignment.query.get_or_404(assignment_id)
+    data = request.get_json(silent=True) or {}
+    assignment.archetype = data.get("archetype", "challenger")
+    assignment.contribution_level = data.get("contribution_level", "thinking_partner")
+    assignment.behavioral_emphasis = data.get("behavioral_emphasis", "balanced")
+    try:
+        assignment.phase_1_end = int(data.get("phase_1_end", 3))
+    except (TypeError, ValueError):
+        assignment.phase_1_end = 3
+    try:
+        assignment.phase_2_end = int(data.get("phase_2_end", 6))
+    except (TypeError, ValueError):
+        assignment.phase_2_end = 6
+    assignment.supplementary_instructions = data.get("supplementary_instructions", "").strip()
+    db.session.commit()
+    return jsonify({"success": True, "message": "AI configuration saved"})
 
 
 @instructor_bp.route("/assignment-config", methods=["POST"])
@@ -152,6 +178,21 @@ def assignment_config():
     assignment.instructions = instructions
     if sections_config is not None:
         assignment.sections_config = sections_config
+
+    # Archetype fields
+    assignment.archetype = data.get("archetype", "challenger")
+    assignment.contribution_level = data.get("contribution_level", "thinking_partner")
+    try:
+        assignment.phase_1_end = int(data.get("phase_1_end", 3))
+    except (TypeError, ValueError):
+        assignment.phase_1_end = 3
+    try:
+        assignment.phase_2_end = int(data.get("phase_2_end", 6))
+    except (TypeError, ValueError):
+        assignment.phase_2_end = 6
+    assignment.sidebar_mode = data.get("sidebar_mode", "prescriptive")
+    assignment.behavioral_emphasis = data.get("behavioral_emphasis", "balanced")
+    assignment.supplementary_instructions = data.get("supplementary_instructions", "").strip()
 
     db.session.commit()
     return jsonify({"success": True})

@@ -20,46 +20,15 @@ def _client() -> anthropic.Anthropic:
 def get_ai_response(
     student_message: str,
     conversation_history: list[dict],
-    course_concepts: list[str],
-    learning_objective: str,
-    assignment_title: str = "",
-    instructions: str = "",
+    system_prompt: str,
 ) -> str:
     """
     Send the current student message (with full conversation history) to Claude
-    and return the assistant's text reply. All parameters are passed fresh from
-    the database on every call so instructor changes take effect immediately.
+    and return the assistant's text reply. The system_prompt is built fresh by
+    build_system_prompt on every call so instructor changes take effect immediately.
     """
-    if instructions.strip():
-        instructions_block = (
-            f"Instructor instructions: {instructions}\n"
-            f"Learning objective: {learning_objective}\n"
-            f"Your role is to help the student think more deeply about their chosen topic. "
-            f"Follow the instructor instructions exactly. "
-            f"Do not add requirements or constraints that are not in the instructor instructions. "
-            f"Do not reference specific theories or frameworks unless the student brings them up first. "
-            f"Ask follow-up questions that help the student develop their own argument. "
-            f"Never write the assignment for them."
-        )
-    else:
-        instructions_block = (
-            f"No specific assignment instructions have been provided yet. "
-            f"Help the student think deeply about any topic they raise. "
-            f"Ask follow-up questions that encourage them to apply their own knowledge and challenge assumptions. "
-            f"Never write for the student."
-        )
+    print("SYSTEM PROMPT:", system_prompt, flush=True)
 
-    system = (
-        f"You are a co-intelligence partner helping a student complete the following assignment.\n"
-        f"Assignment: {assignment_title}\n"
-        f"{instructions_block} "
-        f"Keep responses to three to four sentences in plain conversational prose with no markdown "
-        f"formatting, no asterisks, no bold text, no bullet points."
-    )
-
-    print("SYSTEM PROMPT:", system, flush=True)
-
-    # Build messages: history + new student turn
     messages = list(conversation_history) + [
         {"role": "user", "content": student_message}
     ]
@@ -67,7 +36,7 @@ def get_ai_response(
     response = _client().messages.create(
         model=MODEL,
         max_tokens=MAX_TOKENS,
-        system=system,
+        system=system_prompt,
         messages=messages,
     )
     return response.content[0].text

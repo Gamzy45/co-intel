@@ -35,11 +35,23 @@ class Assignment(db.Model):
     instructions = db.Column(db.Text, nullable=True)
     sections_config = db.Column(db.JSON, nullable=True)
 
+    # Archetype system fields
+    concepts_required = db.Column(db.Boolean, nullable=False, default=False)
+    required_concepts = db.Column(db.JSON, nullable=False, default=list)
+    archetype = db.Column(db.String(50), nullable=False, default="challenger")
+    contribution_level = db.Column(db.String(50), nullable=False, default="thinking_partner")
+    phase_1_end = db.Column(db.Integer, nullable=False, default=3)
+    phase_2_end = db.Column(db.Integer, nullable=False, default=6)
+    sidebar_mode = db.Column(db.String(50), nullable=False, default="prescriptive")
+    behavioral_emphasis = db.Column(db.String(50), nullable=False, default="balanced")
+    supplementary_instructions = db.Column(db.Text, nullable=False, default="")
+
     course = db.relationship("Course", back_populates="assignments")
     exchanges = db.relationship("PromptExchange", back_populates="assignment")
     reflections = db.relationship("Reflection", back_populates="assignment")
     outputs = db.relationship("Output", back_populates="assignment")
     assessment_scores = db.relationship("AssessmentScore", back_populates="assignment")
+    session_summaries = db.relationship("SessionSummary", back_populates="assignment")
 
     def __repr__(self):
         return f"<Assignment {self.title}>"
@@ -119,6 +131,22 @@ class Output(db.Model):
 
     def __repr__(self):
         return f"<Output {self.modality} student={self.student_id}>"
+
+
+class SessionSummary(db.Model):
+    __tablename__ = "session_summaries"
+
+    id = db.Column(db.Integer, primary_key=True)
+    student_id = db.Column(db.Integer, db.ForeignKey("students.id"), nullable=False)
+    assignment_id = db.Column(db.Integer, db.ForeignKey("assignments.id"), nullable=False)
+    summary_json = db.Column(db.Text, nullable=True)
+    generated_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    student = db.relationship("Student")
+    assignment = db.relationship("Assignment", back_populates="session_summaries")
+
+    def __repr__(self):
+        return f"<SessionSummary student={self.student_id} assignment={self.assignment_id}>"
 
 
 class InstructorFeedback(db.Model):

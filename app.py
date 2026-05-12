@@ -78,9 +78,60 @@ def create_app():
 
     with app.app_context():
         db.create_all()
+        _migrate()
         _seed()
 
     return app
+
+
+def _migrate():
+    """Add new columns to existing tables without deleting data."""
+    from sqlalchemy import text
+
+    new_cols = [
+        ("assignments", "concepts_required", "BOOLEAN NOT NULL DEFAULT 0"),
+        ("assignments", "required_concepts",  "TEXT NOT NULL DEFAULT '[]'"),
+        ("assignments", "archetype",           "VARCHAR(50) NOT NULL DEFAULT 'challenger'"),
+        ("assignments", "contribution_level",  "VARCHAR(50) NOT NULL DEFAULT 'thinking_partner'"),
+        ("assignments", "phase_1_end",         "INTEGER NOT NULL DEFAULT 3"),
+        ("assignments", "phase_2_end",         "INTEGER NOT NULL DEFAULT 6"),
+        ("assignments", "sidebar_mode",        "VARCHAR(50) NOT NULL DEFAULT 'prescriptive'"),
+        ("assignments", "behavioral_emphasis", "VARCHAR(50) NOT NULL DEFAULT 'balanced'"),
+        ("assignments", "supplementary_instructions", "TEXT NOT NULL DEFAULT ''"),
+    ]
+    with db.engine.connect() as conn:
+        for table, col, col_def in new_cols:
+            try:
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} {col_def}"))
+                conn.commit()
+            except Exception:
+                pass  # Column already exists
+
+        # Clear instructions for Deep Dive with AI (NMS assignment only)
+        try:
+            conn.execute(text(
+                "UPDATE assignments SET instructions = '' "
+                "WHERE title = 'Deep Dive with AI' AND (instructions IS NOT NULL AND instructions != '')"
+            ))
+            conn.commit()
+        except Exception:
+            pass
+
+        # Backfill NULL values in archetype columns so existing rows are never NULL
+        backfills = [
+            ("assignments", "archetype",           "'challenger'"),
+            ("assignments", "contribution_level",  "'thinking_partner'"),
+            ("assignments", "phase_1_end",         "3"),
+            ("assignments", "phase_2_end",         "6"),
+            ("assignments", "sidebar_mode",        "'prescriptive'"),
+            ("assignments", "behavioral_emphasis", "'balanced'"),
+        ]
+        for table, col, default in backfills:
+            try:
+                conn.execute(text(f"UPDATE {table} SET {col} = {default} WHERE {col} IS NULL OR {col} = ''"))
+                conn.commit()
+            except Exception:
+                pass
 
 
 def _seed():
@@ -89,6 +140,8 @@ def _seed():
         Reflection, Output, ReflectionConfig,
     )
     from config import DEFAULT_REFLECTION_QUESTIONS
+
+    from models.models import SessionSummary
 
     if Course.query.count() > 0:
         return
@@ -131,18 +184,20 @@ def _seed():
         title="Deep Dive with AI",
         description=(
             "Select a recent media event and engage in a structured AI dialogue "
-            "to unpack how it was framed across different outlets. Apply at least "
-            "three required course concepts in your exchanges, push back on at "
+            "to unpack how it was framed across different outlets. Push back on at "
             "least one AI response, and produce a final output in your chosen modality."
         ),
         due_date=now + timedelta(days=14),
         modality="critical analysis",
-        instructions=(
-            "Select any topic related to AI, social media, media and globalization, online dating, "
-            "or videogaming. Engage in a structured dialogue with AI to explore how your chosen topic "
-            "shapes culture, society, or public perception. Push back on at least one AI response and "
-            "produce a final output in your chosen modality."
-        ),
+        instructions="",
+        concepts_required=False,
+        required_concepts=[],
+        archetype="challenger",
+        contribution_level="thinking_partner",
+        phase_1_end=3,
+        phase_2_end=6,
+        behavioral_emphasis="balanced",
+        supplementary_instructions="",
     )
     db.session.add(nms_assignment)
     db.session.flush()
@@ -153,74 +208,7 @@ def _seed():
     db.session.add_all([nms_alex, nms_jamie, nms_riley])
     db.session.flush()
 
-    nms_reflection = Reflection(
-        student_id=nms_alex.id,
-        assignment_id=nms_assignment.id,
-        question_1=(
-            "I was surprised by how much agenda-setting and confirmation bias overlap. "
-            "I went in thinking they were separate phenomena but the AI helped me see "
-            "they form a feedback loop. That reframing changed how I want to structure "
-            "my analysis document."
-        ),
-        question_2=(
-            "I pushed back in exchange 2 and the AI validated my point while adding "
-            "nuance about co-presence of mechanisms. It didn't just agree—it gave me "
-            "Stroud's research as a way to hold both ideas simultaneously. That felt "
-            "like genuine intellectual engagement rather than the AI just confirming me."
-        ),
-        question_3=(
-            "I want to compare three outlets instead of two, and add a section on "
-            "audience analytics as evidence of the confirmation bias loop. The selective "
-            "framing example with the October jobs report is concrete enough to anchor "
-            "the whole document."
-        ),
-        submitted_at=now - timedelta(minutes=20),
-    )
-    db.session.add(nms_reflection)
-
-    nms_sections = {
-        "intro": (
-            "This analysis examines how Fox News and MSNBC covered the 2024 US presidential "
-            "election cycle, applying agenda-setting theory and framing theory to understand "
-            "how each network constructed a different public reality from the same underlying events."
-        ),
-        "comparative": (
-            "Fox News ranked economic anxiety, immigration, and crime at the top of its salience "
-            "hierarchy throughout the cycle. MSNBC foregrounded threats to democratic institutions, "
-            "reproductive rights, and climate policy. Neither network invented its agenda—each amplified "
-            "concerns already present in its audience—but editorial gatekeeping about story placement, "
-            "airtime, and guest selection sharpened those hierarchies over time. The October jobs report "
-            "illustrates the divergence most concretely: Fox led with grocery prices and skeptical economists, "
-            "treating 254,000 jobs added as a footnote; MSNBC led with the same number as vindication of "
-            "economic policy. Entman's four framing functions operated differently on identical source data."
-        ),
-        "argument": (
-            "My central argument is that agenda-setting and confirmation bias form a self-reinforcing "
-            "feedback loop that makes divergent coverage commercially rational, not simply ideologically "
-            "motivated. This insight came from my own pushback in exchange 2: I initially thought "
-            "confirmation bias was purely an audience phenomenon, separate from network agenda-setting. "
-            "The AI's response helped me see they are co-constitutive. Networks learn through ratings "
-            "which frames generate engagement, intensify those frames, and attract audiences already primed "
-            "to respond. Audiences self-select toward confirming environments, generating the metrics that "
-            "reward networks for intensification. Neither side causes the other—the loop is the structure."
-        ),
-        "conclusion": (
-            "Agenda-setting theory explains macro-level issue prioritization; framing theory explains "
-            "micro-level narrative construction; confirmation bias explains why divergence is economically "
-            "sustainable rather than self-correcting. Understanding all three is necessary for media "
-            "literacy in a fragmented information environment where audiences can, and do, construct "
-            "entirely separate informational realities from the same news cycle."
-        ),
-    }
-    nms_output = Output(
-        student_id=nms_alex.id,
-        assignment_id=nms_assignment.id,
-        modality="critical analysis",
-        content="\n\n".join(nms_sections.values()),
-        content_sections=nms_sections,
-        submitted_at=now - timedelta(minutes=10),
-    )
-    db.session.add(nms_output)
+    # No pre-seeded exchanges, reflections, or outputs — students start completely fresh
 
     # ------------------------------------------------------------------ Course 2: Intercultural Communication
     ic = Course(
@@ -271,6 +259,14 @@ def _seed():
             "distinguish between personal and social identity. Document your creative decisions and "
             "be prepared to present your game design to the class."
         ),
+        concepts_required=False,
+        required_concepts=[],
+        archetype="design_thinker",
+        contribution_level="thinking_partner",
+        phase_1_end=3,
+        phase_2_end=6,
+        behavioral_emphasis="balanced",
+        supplementary_instructions="",
     )
     db.session.add(ic_assignment)
     db.session.flush()
