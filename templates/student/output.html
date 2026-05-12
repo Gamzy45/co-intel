@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% block title %}Output — Co-Intelligence{% endblock %}
+
+{% block page_styles %}
+<style>
+  .modality-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:16px; }
+  .modality-card {
+    border:1px solid var(--border); border-radius:10px; padding:12px 14px;
+    cursor:pointer; font-size:12px; color:var(--text-secondary);
+    background:var(--bg-primary); transition:border-color .15s,background .15s; user-select:none;
+  }
+  .modality-card:hover { background:var(--bg-surface); }
+  .modality-card.selected {
+    border-color:var(--accent); background:var(--bg-orange-light);
+    color:var(--text-orange); font-weight:500;
+  }
+  .modality-icon { font-size:18px; margin-bottom:6px; }
+  .locked-overlay { text-align:center; padding:40px 20px; color:var(--text-tertiary); }
+  .locked-overlay .lock-icon { font-size:28px; margin-bottom:10px; }
+  .locked-overlay p { font-size:13px; line-height:1.6; max-width:320px; margin:0 auto; }
+  .action-row { display:flex; gap:8px; margin-top:12px; justify-content:flex-end; }
+  .save-status { font-size:11px; color:var(--pill-green-text); align-self:center; margin-right:auto; display:none; }
+</style>
+{% endblock %}
+
+{% block sidebar %}
+<nav class="sidebar">
+  <div class="sidebar-section">Workflow</div>
+  <a href="{{ url_for('student.prompting') }}"
+     class="sidebar-item{% if request.endpoint == 'student.prompting' %} active{% endif %}">
+    <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+    Dialogic prompting
+  </a>
+  <a href="{{ url_for('student.output') }}"
+     class="sidebar-item{% if request.endpoint == 'student.output' %} active{% endif %}">
+    <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+    Output
+  </a>
+  <a href="{{ url_for('student.reflection') }}"
+     class="sidebar-item{% if request.endpoint == 'student.reflection' %} active{% endif %}">
+    <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    Reflection
+  </a>
+  <div class="sidebar-section" style="margin-top:8px;">Course</div>
+  <div class="sidebar-item" style="cursor:default;color:var(--text-tertiary);font-size:11px;padding-top:4px;padding-bottom:4px;">
+    {{ course.name }}
+  </div>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div style="margin-bottom:16px;">
+  <h1 style="font-size:16px;font-weight:500;color:var(--text-primary);">Output</h1>
+  <div style="font-size:11px;color:var(--text-tertiary);margin-top:3px;">
+    {{ course.name }} &middot; {{ assignment.title }}
+  </div>
+</div>
+
+{% if not unlocked %}
+<div class="card">
+  <div class="locked-overlay">
+    <div class="lock-icon">&#128274;</div>
+    <p>
+      Complete at least <strong>{{ min_exchanges }} exchanges</strong> in the prompting phase
+      before submitting your output.<br><br>
+      You have completed <strong>{{ exchange_count }}</strong> so far.
+      <strong>{{ min_exchanges - exchange_count }}</strong> more to go.
+    </p>
+    <div style="margin-top:16px;">
+      <a href="{{ url_for('student.prompting') }}" class="btn btn-primary">Back to prompting</a>
+    </div>
+  </div>
+</div>
+
+{% else %}
+
+{% set icons = {
+  "critical analysis document": "&#128196;",
+  "podcast script": "&#127911;",
+  "game design document": "&#127918;",
+  "presentation outline": "&#128202;"
+} %}
+
+<div class="card" style="margin-bottom:12px;">
+  <div style="font-size:12px;font-weight:500;color:var(--text-secondary);margin-bottom:10px;">Choose your output modality</div>
+  <div class="modality-grid" id="modality-grid">
+    {% for m in modalities %}
+    <div class="modality-card {% if existing_output and existing_output.modality == m %}selected{% endif %}"
+         data-modality="{{ m }}" onclick="selectModality(this)">
+      <div class="modality-icon">{{ icons.get(m, '&#128196;') }}</div>
+      {{ m | capitalize }}
+    </div>
+    {% endfor %}
+  </div>
+  <input type="hidden" id="selected-modality" value="{{ existing_output.modality if existing_output else '' }}" />
+</div>
+
+<div class="card">
+  <div style="font-size:12px;font-weight:500;color:var(--text-secondary);margin-bottom:8px;">Your output</div>
+  <textarea id="output-content" rows="18"
+    placeholder="Write your final output here. Draw on your AI dialogue and apply the course concepts you explored."
+  >{{ existing_output.content if existing_output else '' }}</textarea>
+  <div class="action-row">
+    <span class="save-status" id="save-status">&#10003; Saved</span>
+    <button class="btn" onclick="saveOutput(false)">Save draft</button>
+    <button class="btn btn-primary" onclick="saveOutput(true)">Submit output</button>
+  </div>
+  <div id="output-error" style="display:none;color:var(--text-orange);font-size:11px;margin-top:6px;"></div>
+</div>
+
+{% endif %}
+{% endblock %}
+
+{% block page_scripts %}
+<script>
+  async function saveOutput(isSubmit) {
+    const modality = document.getElementById('selected-modality').value;
+    const content  = document.getElementById('output-content').value.trim();
+    const errorEl  = document.getElementById('output-error');
+    const statusEl = document.getElementById('save-status');
+    errorEl.style.display = 'none';
+    if (!modality) { errorEl.textContent = 'Please select an output modality.'; errorEl.style.display = 'block'; return; }
+    if (!content)  { errorEl.textContent = 'Please write your output before saving.'; errorEl.style.display = 'block'; return; }
+    try {
+      const resp = await fetch('{{ url_for("student.output") }}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ modality, content }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || 'Save failed');
+      statusEl.style.display = 'inline';
+      statusEl.textContent = isSubmit ? '\u2713 Submitted' : '\u2713 Saved';
+      setTimeout(() => { statusEl.style.display = 'none'; }, 3000);
+    } catch (err) {
+      errorEl.textContent = err.message;
+      errorEl.style.display = 'block';
+    }
+  }
+</script>
+{% endblock %}

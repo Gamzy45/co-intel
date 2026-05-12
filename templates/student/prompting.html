@@ -1,0 +1,446 @@
+{% extends "base.html" %}
+{% block title %}Dialogic prompting — Co-Intelligenceligence{% endblock %}
+
+{% block page_styles %}
+<style>
+  .phase-track { display:flex; align-items:center; gap:0; }
+  .phase-step  {
+    display:flex; align-items:center; gap:6px; font-size:11px;
+    color:var(--text-tertiary); padding:3px 8px; border-radius:6px;
+    transition:color .25s, background .25s;
+  }
+  .phase-step:first-child { padding-left:4px; }
+  .phase-dot   { width:6px; height:6px; border-radius:50%; background:var(--border); flex-shrink:0; transition:background .25s; }
+  .phase-check { display:none; font-size:11px; line-height:1; }
+  .phase-step.done   .phase-dot  { display:none; }
+  .phase-step.done   .phase-check { display:inline; }
+  .phase-step.active .phase-dot  { background:var(--course-accent); }
+  .phase-step.active { color:var(--course-accent); font-weight:500; background:var(--bg-orange-light); }
+  .phase-sep   { width:16px; height:1px; background:var(--border); flex-shrink:0; }
+
+  /* Per-phase done colors */
+  #phase-orient.done    { background:#FEF3E2; color:#92580a; }
+  #phase-orient.done    .phase-check { color:#92580a; }
+  #phase-challenge.done { background:var(--bg-orange-light); color:var(--course-accent-text, var(--text-orange)); }
+  #phase-challenge.done .phase-check { color:var(--course-accent-text, var(--text-orange)); }
+  #phase-synthesize.done { background:#E6F7F5; color:#0A7A6E; }
+  #phase-synthesize.done .phase-check { color:#0A7A6E; }
+  #phase-reflect.done   { background:#EAFAF1; color:#1a7a45; }
+  #phase-reflect.done   .phase-check { color:#1a7a45; }
+
+  .progress-row { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px; }
+
+  .chat-input-row { display:flex; gap:8px; margin-top:12px; }
+  .chat-input-row textarea { flex:1; min-height:60px; max-height:120px; }
+  .chat-input-row .btn { align-self:flex-end; }
+
+  /* Mic button */
+  .btn-mic {
+    align-self:flex-end; width:36px; height:36px; padding:0;
+    border-radius:8px; border:1px solid var(--border);
+    background:transparent; cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+    flex-shrink:0; transition:background .15s, border-color .15s;
+  }
+  .btn-mic:hover { background:var(--bg-surface); }
+  .btn-mic.recording {
+    background:var(--bg-orange-light); border-color:var(--accent);
+    animation:mic-pulse 1.2s ease-in-out infinite;
+  }
+  .btn-mic.unsupported { opacity:.35; cursor:not-allowed; }
+  @keyframes mic-pulse {
+    0%,100% { box-shadow:0 0 0 0 rgba(232,96,42,.3); }
+    50%      { box-shadow:0 0 0 5px rgba(232,96,42,0); }
+  }
+
+  .typing-indicator { display:none; align-self:flex-start; max-width:82%; }
+  .typing-indicator.visible { display:block; }
+  .typing-dots {
+    background:var(--bg-surface); border-radius:12px 12px 12px 2px;
+    padding:10px 16px; display:inline-flex; gap:4px; align-items:center;
+  }
+  .typing-dots span {
+    width:5px; height:5px; border-radius:50%;
+    background:var(--text-tertiary); animation:bounce 1.2s infinite;
+  }
+  .typing-dots span:nth-child(2) { animation-delay:.2s; }
+  .typing-dots span:nth-child(3) { animation-delay:.4s; }
+  @keyframes bounce {
+    0%,80%,100% { transform:translateY(0); }
+    40%         { transform:translateY(-5px); }
+  }
+</style>
+{% endblock %}
+
+{% block sidebar %}
+<nav class="sidebar">
+  <div class="sidebar-section">Workflow</div>
+  <a href="{{ url_for('student.prompting') }}"
+     class="sidebar-item{% if request.endpoint == 'student.prompting' %} active{% endif %}">
+    <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+    Dialogic prompting
+  </a>
+  <a href="{{ url_for('student.assignment') }}"
+     class="sidebar-item{% if request.endpoint == 'student.assignment' %} active{% endif %}">
+    <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+    Assignment
+  </a>
+  <a href="{{ url_for('student.reflection') }}"
+     class="sidebar-item{% if request.endpoint == 'student.reflection' %} active{% endif %}">
+    <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    Reflection
+  </a>
+  {% include "_course_nav.html" %}
+</nav>
+{% endblock %}
+
+{% block content %}
+<!-- Page header -->
+<div style="margin-bottom:16px;">
+  <h1 class="page-title">Dialogic prompting</h1>
+  <div class="page-sub">
+    {{ course.name }} &middot; {{ assignment.title }}
+    {% if assignment.due_date %}&middot; Due {{ assignment.due_date.strftime('%b %d') }}{% endif %}
+  </div>
+</div>
+
+<!-- Assignment brief -->
+{% set modality_icons = {
+  "critical analysis": "ti-file-text",
+  "podcast script": "ti-microphone",
+  "interactive game design": "ti-device-gamepad",
+  "presentation outline": "ti-presentation",
+  "video script": "ti-video"
+} %}
+{% if assignment.instructions %}
+<div class="card" style="margin-bottom:16px;background:var(--bg-surface);">
+  <div style="font-size:11px;font-weight:500;color:var(--text-secondary);margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em;">Assignment brief</div>
+  {% if assignment.modality %}
+  <div style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--text-secondary);background:var(--bg-primary);border:1px solid var(--border);border-radius:5px;padding:3px 8px;margin-bottom:8px;">
+    <i class="ti {{ modality_icons.get(assignment.modality, 'ti-file-text') }}" style="font-size:13px;"></i>
+    {{ assignment.modality | title }}
+  </div>
+  {% endif %}
+  <div style="font-size:12px;color:var(--text-primary);line-height:1.65;">{{ assignment.instructions }}</div>
+</div>
+{% else %}
+<div style="font-size:12px;color:var(--text-tertiary);margin-bottom:16px;">
+  Your instructor has not added assignment instructions yet. Check back before you begin.
+</div>
+{% endif %}
+
+<!-- Phase track -->
+{% set challenge_done = exchange_count >= min_exchanges and pushback_count >= 1 %}
+{% set orient_cls    = 'done' if exchange_count >= 1 else 'active' %}
+{% set challenge_cls = 'done' if challenge_done else ('active' if exchange_count >= 1 else '') %}
+{% set synthesize_cls = 'done' if has_output else ('active' if challenge_done else '') %}
+{% set reflect_cls   = 'done' if has_reflection else ('active' if has_output else '') %}
+
+<div style="margin-bottom:18px;">
+  <div class="phase-track">
+    <div class="phase-step {{ orient_cls }}" id="phase-orient">
+      <span class="phase-dot"></span><span class="phase-check">✓</span> Orient
+    </div>
+    <div class="phase-sep"></div>
+    <div class="phase-step {{ challenge_cls }}" id="phase-challenge">
+      <span class="phase-dot"></span><span class="phase-check">✓</span> Challenge
+    </div>
+    <div class="phase-sep"></div>
+    <div class="phase-step {{ synthesize_cls }}" id="phase-synthesize">
+      <span class="phase-dot"></span><span class="phase-check">✓</span> Synthesize
+    </div>
+    <div class="phase-sep"></div>
+    <div class="phase-step {{ reflect_cls }}" id="phase-reflect">
+      <span class="phase-dot"></span><span class="phase-check">✓</span> Reflect
+    </div>
+  </div>
+</div>
+
+<!-- Progress pills -->
+<div class="progress-row" id="progress-row">
+  <span class="pill pill-gray" id="exchange-pill">{{ exchange_count }} / {{ min_exchanges }} exchanges</span>
+  <span class="pill {% if pushback_count > 0 %}pill-green{% else %}pill-gray{% endif %}" id="pushback-pill">
+    {{ pushback_count }} pushback{% if pushback_count != 1 %}s{% endif %}
+  </span>
+  {% for concept in required_concepts %}
+  <span class="pill {% if concept in concepts_used %}pill-orange{% else %}pill-gray{% endif %}"
+        data-concept="{{ concept }}">{{ concept }}</span>
+  {% endfor %}
+</div>
+
+<!-- Chat card -->
+<div class="card">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+    <span style="font-size:12px;font-weight:500;color:var(--text-secondary);">Conversation</span>
+    <span style="font-size:11px;color:var(--text-tertiary);" id="exchange-count-label">
+      {{ exchange_count }} exchange{% if exchange_count != 1 %}s{% endif %}
+    </span>
+  </div>
+
+  <div class="chat-wrap" id="chat-wrap">
+
+    {% if not exchanges %}
+    <!-- Prompting guidelines card — hidden once first message is sent -->
+    <div id="guidelines-card" style="background:var(--bg-surface);border:1px solid var(--border);border-radius:10px;padding:16px 18px;margin-bottom:4px;">
+      <div style="font-size:12px;font-weight:500;color:var(--text-primary);margin-bottom:12px;">How to get the most from this conversation</div>
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <div style="display:flex;align-items:flex-start;gap:10px;">
+          <i class="ti ti-target" style="font-size:16px;color:var(--accent);flex-shrink:0;margin-top:1px;"></i>
+          <div><span style="font-size:13px;font-weight:500;color:var(--text-primary);">Give AI a clear task.&nbsp;</span><span style="font-size:13px;color:var(--text-secondary);">Tell AI specifically what you want to explore, analyze, or understand. Vague prompts produce vague responses.</span></div>
+        </div>
+        <div style="display:flex;align-items:flex-start;gap:10px;">
+          <i class="ti ti-adjustments" style="font-size:16px;color:var(--accent);flex-shrink:0;margin-top:1px;"></i>
+          <div><span style="font-size:13px;font-weight:500;color:var(--text-primary);">Add constraints.&nbsp;</span><span style="font-size:13px;color:var(--text-secondary);">Specify length, format, tone, or perspective. For example: respond in 150 words from the perspective of a media scholar.</span></div>
+        </div>
+        <div style="display:flex;align-items:flex-start;gap:10px;">
+          <i class="ti ti-bulb" style="font-size:16px;color:var(--accent);flex-shrink:0;margin-top:1px;"></i>
+          <div><span style="font-size:13px;font-weight:500;color:var(--text-primary);">Bring your own ideas.&nbsp;</span><span style="font-size:13px;color:var(--text-secondary);">Do not just ask AI to explain things. Share your own position first and ask AI to respond to it, challenge it, or build on it.</span></div>
+        </div>
+        <div style="display:flex;align-items:flex-start;gap:10px;">
+          <i class="ti ti-book" style="font-size:16px;color:var(--accent);flex-shrink:0;margin-top:1px;"></i>
+          <div><span style="font-size:13px;font-weight:500;color:var(--text-primary);">Apply course concepts.&nbsp;</span><span style="font-size:13px;color:var(--text-secondary);">Use the concepts from your course to frame your questions. Reference specific theories, frameworks, or readings to steer AI toward disciplinary thinking.</span></div>
+        </div>
+      </div>
+    </div>
+    {% else %}
+      {% for ex in exchanges %}
+      <div class="msg-you" id="msg-you-{{ ex.exchange_number }}">
+        <div class="msg-meta" style="text-align:right;">
+          {{ student.name }} &middot; {{ ex.timestamp.strftime('%H:%M') if ex.timestamp else '' }}
+        </div>
+        <div class="bubble-you">{{ ex.student_message }}</div>
+        <div class="annotation" style="justify-content:flex-end;">
+          {% for concept in ex.concepts_applied %}<span class="atag atag-concept">{{ concept }}</span>{% endfor %}
+          {% if ex.has_pushback %}<span class="atag atag-pushback">pushback</span>{% endif %}
+        </div>
+      </div>
+      <div class="msg-ai">
+        <div class="msg-meta">Co-Intelligence</div>
+        <div class="bubble-ai">{{ ex.ai_response }}</div>
+      </div>
+      {% endfor %}
+    {% endif %}
+
+    <!-- Typing indicator -->
+    <div class="typing-indicator" id="typing-indicator">
+      <div class="msg-meta">Co-Intelligence</div>
+      <div class="typing-dots"><span></span><span></span><span></span></div>
+    </div>
+
+  </div><!-- /.chat-wrap -->
+
+  <!-- Input row -->
+  <div class="chat-input-row">
+    <textarea id="student-input" rows="3"
+      placeholder="Apply a course concept, push back on an AI claim, or build on the last response…"></textarea>
+    <button class="btn-mic" id="mic-btn" title="Speak your message" onclick="toggleMic()">
+      <!-- Mic icon -->
+      <svg id="mic-icon" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24">
+        <rect x="9" y="2" width="6" height="11" rx="3"/>
+        <path d="M5 10a7 7 0 0 0 14 0"/>
+        <line x1="12" y1="17" x2="12" y2="21"/>
+        <line x1="9" y1="21" x2="15" y2="21"/>
+      </svg>
+    </button>
+    <button class="btn btn-primary" id="send-btn" onclick="sendMessage()">Send</button>
+  </div>
+  <div id="mic-status" style="display:none;font-size:11px;color:var(--text-orange);margin-top:4px;">
+    Listening… speak now, then click the mic to stop.
+  </div>
+  <div id="send-error" style="display:none;color:var(--text-orange);font-size:11px;margin-top:6px;"></div>
+  <div style="font-size:12px;color:var(--text-tertiary);margin-top:8px;">
+    Use course concepts to direct, challenge, and build on AI responses.
+  </div>
+</div>
+
+
+{% if feedback %}
+<!-- Instructor feedback -->
+<div class="card" style="margin-top:12px;border-color:var(--accent);background:var(--bg-orange-light);">
+  <div style="font-size:11px;font-weight:500;color:var(--text-orange);margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em;">Instructor feedback</div>
+  <div style="font-size:13px;color:var(--text-primary);line-height:1.65;">{{ feedback.feedback_text }}</div>
+  <div style="font-size:11px;color:var(--text-tertiary);margin-top:8px;">
+    Received {{ feedback.updated_at.strftime('%b %d, %Y') }}
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block page_scripts %}
+<script>
+  let exchangeCount = {{ exchange_count }};
+  const minExchanges = {{ min_exchanges }};
+  let pushbackCount = {{ pushback_count }};
+  const hasOutput = {{ 'true' if has_output else 'false' }};
+  const hasReflection = {{ 'true' if has_reflection else 'false' }};
+  let conceptsUsed = new Set({{ concepts_used | tojson }});
+  const requiredConcepts = {{ required_concepts | tojson }};
+
+  function updatePhaseTrack() {
+    const challengeDone = exchangeCount >= minExchanges && pushbackCount >= 1;
+    const states = {
+      orient:    exchangeCount >= 1 ? 'done' : 'active',
+      challenge: exchangeCount === 0 ? '' : challengeDone ? 'done' : 'active',
+      synthesize: challengeDone ? (hasOutput ? 'done' : 'active') : '',
+      reflect:    hasOutput ? (hasReflection ? 'done' : 'active') : '',
+    };
+    for (const [name, state] of Object.entries(states)) {
+      const el = document.getElementById('phase-' + name);
+      el.className = 'phase-step' + (state ? ' ' + state : '');
+    }
+  }
+
+  function escHtml(str) {
+    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+  }
+
+  function appendUserMessage(text, num, concepts, hasPushback) {
+    const now = new Date();
+    const time = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
+    let tags = concepts.map(c => `<span class="atag atag-concept">${c}</span>`).join('');
+    if (hasPushback) tags += `<span class="atag atag-pushback">pushback</span>`;
+    const el = document.createElement('div');
+    el.className = 'msg-you';
+    el.id = `msg-you-${num}`;
+    el.innerHTML = `
+      <div class="msg-meta" style="text-align:right;">{{ student.name }} &middot; ${time}</div>
+      <div class="bubble-you">${escHtml(text)}</div>
+      <div class="annotation" style="justify-content:flex-end;">${tags}</div>`;
+    document.getElementById('chat-wrap').insertBefore(el, document.getElementById('typing-indicator'));
+  }
+
+  function appendAiMessage(text) {
+    const el = document.createElement('div');
+    el.className = 'msg-ai';
+    el.innerHTML = `<div class="msg-meta">Co-Intelligence</div><div class="bubble-ai">${escHtml(text)}</div>`;
+    document.getElementById('chat-wrap').insertBefore(el, document.getElementById('typing-indicator'));
+  }
+
+  async function sendMessage() {
+    const input  = document.getElementById('student-input');
+    const sendBtn = document.getElementById('send-btn');
+    const errorEl = document.getElementById('send-error');
+    const text = input.value.trim();
+    if (!text) return;
+
+    errorEl.style.display = 'none';
+    sendBtn.disabled = true;
+    sendBtn.textContent = '…';
+    input.disabled = true;
+
+    // Remove guidelines card on first send
+    const guidelines = document.getElementById('guidelines-card');
+    if (guidelines) guidelines.remove();
+
+    showTypingIndicator();
+
+    try {
+      const resp = await fetch('{{ url_for("student.prompting") }}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ student_message: text }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || 'Unknown error');
+
+      hideTypingIndicator();
+      appendUserMessage(text, data.exchange_number, data.concepts_applied, data.has_pushback);
+      appendAiMessage(data.ai_response);
+      scrollChatToBottom();
+
+      exchangeCount = data.exchange_number;
+      if (data.has_pushback) pushbackCount++;
+      updatePhaseTrack();
+
+      // Update concept pills
+      data.concepts_applied.forEach(c => conceptsUsed.add(c));
+      document.querySelectorAll('[data-concept]').forEach(pill => {
+        const c = pill.dataset.concept;
+        pill.className = 'pill ' + (conceptsUsed.has(c) ? 'pill-orange' : 'pill-gray');
+      });
+      document.getElementById('exchange-pill').textContent =
+        `${exchangeCount} / ${minExchanges} exchanges`;
+      document.getElementById('exchange-count-label').textContent =
+        `${exchangeCount} exchange${exchangeCount !== 1 ? 's' : ''}`;
+
+      // Clear input after successful send
+      input.value = '';
+
+    } catch (err) {
+      hideTypingIndicator();
+      errorEl.textContent = err.message;
+      errorEl.style.display = 'block';
+    } finally {
+      sendBtn.disabled = false;
+      sendBtn.textContent = 'Send';
+      input.disabled = false;
+      input.focus();
+    }
+  }
+
+  document.getElementById('student-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) sendMessage();
+  });
+
+  // ── Web Speech API (microphone) ──────────────────────────────────
+  const micBtn    = document.getElementById('mic-btn');
+  const micStatus = document.getElementById('mic-status');
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let recognition = null;
+  let isRecording = false;
+
+  if (!SpeechRecognition) {
+    micBtn.classList.add('unsupported');
+    micBtn.title = 'Voice input is not supported in this browser. Use Chrome or Edge.';
+  } else {
+    recognition = new SpeechRecognition();
+    recognition.continuous = true;       // keep listening until stopped
+    recognition.interimResults = true;   // show words as they are spoken
+    recognition.lang = 'en-US';
+
+    recognition.onresult = (event) => {
+      const input = document.getElementById('student-input');
+      let transcript = '';
+      for (let i = 0; i < event.results.length; i++) {
+        transcript += event.results[i][0].transcript;
+      }
+      input.value = transcript;
+    };
+
+    recognition.onerror = (event) => {
+      stopMic();
+      if (event.error !== 'aborted') {
+        document.getElementById('send-error').textContent =
+          'Microphone error: ' + event.error;
+        document.getElementById('send-error').style.display = 'block';
+      }
+    };
+
+    recognition.onend = () => {
+      // Restart if we're still supposed to be recording (handles auto-stop on silence)
+      if (isRecording) recognition.start();
+    };
+  }
+
+  function toggleMic() {
+    if (!SpeechRecognition) return;
+    isRecording ? stopMic() : startMic();
+  }
+
+  function startMic() {
+    document.getElementById('send-error').style.display = 'none';
+    document.getElementById('student-input').value = '';
+    isRecording = true;
+    micBtn.classList.add('recording');
+    micStatus.style.display = 'block';
+    recognition.start();
+  }
+
+  function stopMic() {
+    isRecording = false;
+    micBtn.classList.remove('recording');
+    micStatus.style.display = 'none';
+    recognition.stop();
+  }
+</script>
+{% endblock %}

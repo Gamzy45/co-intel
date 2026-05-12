@@ -1,0 +1,267 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — Co-Intelligence{% endblock %}
+
+{% block page_styles %}
+<style>
+  .student-row { display:flex; align-items:center; gap:12px; padding:10px 0; border-bottom:1px solid var(--border); }
+  .student-row:last-child { border-bottom:none; }
+  .avatar { width:32px; height:32px; border-radius:50%; background:var(--bg-orange-light); color:var(--text-orange); font-size:11px; font-weight:500; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .student-name { font-size:13px; color:var(--text-primary); min-width:90px; }
+  .score-bar-wrap { flex:1; height:5px; background:var(--border); border-radius:3px; overflow:hidden; }
+  .score-bar-fill { height:100%; background:var(--accent); border-radius:3px; }
+  .score-num { font-size:12px; color:var(--text-secondary); min-width:28px; text-align:right; }
+  .metric-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-bottom:16px; }
+  .pill-depth-deep     { background:var(--pill-green-bg); color:var(--pill-green-text); }
+  .pill-depth-moderate { background:var(--pill-amber-bg); color:var(--pill-amber-text); }
+  .pill-depth-surface  { background:var(--bg-surface);    color:var(--text-secondary);  }
+  .pill-depth-pending  { background:var(--bg-surface);    color:var(--text-tertiary);   }
+
+  /* Config section */
+  .cfg-field { margin-bottom:10px; }
+  .cfg-label { font-size:11px; color:var(--text-tertiary); display:block; margin-bottom:4px; }
+  .cfg-select, .cfg-textarea, .cfg-input {
+    width:100%; font-size:12px; padding:6px 8px;
+    border:1px solid var(--border); border-radius:6px;
+    background:var(--bg-primary); color:var(--text-primary);
+    font-family:inherit; line-height:1.5;
+  }
+  .cfg-textarea { resize:vertical; }
+
+  /* Section editor */
+  .section-editor { margin-top:14px; }
+  .section-editor-label { font-size:11px; font-weight:600; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.05em; margin-bottom:8px; }
+  .section-row-edit {
+    border:1px solid var(--border); border-radius:8px; padding:10px 12px;
+    margin-bottom:6px; background:var(--bg-surface);
+  }
+  .section-row-edit .row-num { font-size:10px; font-weight:600; color:var(--text-orange); margin-bottom:6px; }
+  .section-field-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+</style>
+{% endblock %}
+
+{% block sidebar %}
+<nav class="sidebar">
+  <div class="sidebar-section">Overview</div>
+  <a href="{{ url_for('instructor.dashboard') }}"
+     class="sidebar-item{% if request.endpoint == 'instructor.dashboard' %} active{% endif %}">
+    <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+    Dashboard
+  </a>
+  {% include "_course_nav.html" %}
+</nav>
+{% endblock %}
+
+{% block content %}
+<div style="margin-bottom:16px;">
+  <h1 class="page-title" style="font-size:20px;">{{ course.name }}</h1>
+  <div class="page-sub" style="display:flex;align-items:center;gap:8px;">
+    {{ assignment.title }}
+    {% if assignment.due_date %}&middot; Due {{ assignment.due_date.strftime('%b %d, %Y') }}{% endif %}
+    <span class="pill pill-orange">active</span>
+  </div>
+</div>
+
+<div class="metric-grid">
+  <div class="metric-card" style="background:#FDF8F5;">
+    <div class="metric-label">Students active</div>
+    <div class="metric-val">{{ active_count }}</div>
+    <div class="metric-sub">of {{ rows | length }} enrolled</div>
+  </div>
+  <div class="metric-card" style="background:#F0F7FF;">
+    <div class="metric-label">Avg exchanges</div>
+    <div class="metric-val">{{ avg_exchanges }}</div>
+    <div class="metric-sub">min {{ assignment.course.min_exchanges }} required</div>
+  </div>
+  <div class="metric-card" style="background:#F0FAF4;">
+    <div class="metric-label">Deep engagement</div>
+    <div class="metric-val">{{ deep_count }}</div>
+    <div class="metric-sub">score &ge; 75</div>
+  </div>
+  <div class="metric-card" style="background:#F5F0FF;">
+    <div class="metric-label">Reflections submitted</div>
+    <div class="metric-val">{{ reflection_count }}</div>
+    <div class="metric-sub">of {{ rows | length }} students</div>
+  </div>
+</div>
+
+<!-- Assignment configuration -->
+<div class="card" style="margin-bottom:12px;">
+  <div style="font-size:12px;font-weight:500;color:var(--text-secondary);margin-bottom:12px;">Assignment configuration</div>
+
+  <div class="cfg-field">
+    <label class="cfg-label">Deliverable format</label>
+    <select id="cfg-modality" class="cfg-select" onchange="onModalityChange(this.value)">
+      <option value="critical analysis"{% if assignment.modality == 'critical analysis' %} selected{% endif %}>Critical analysis</option>
+      <option value="podcast script"{% if assignment.modality == 'podcast script' %} selected{% endif %}>Podcast script</option>
+      <option value="interactive game design"{% if assignment.modality == 'interactive game design' %} selected{% endif %}>Interactive game design</option>
+      <option value="presentation outline"{% if assignment.modality == 'presentation outline' %} selected{% endif %}>Presentation outline</option>
+      <option value="video script"{% if assignment.modality == 'video script' %} selected{% endif %}>Video script</option>
+    </select>
+  </div>
+
+  <div class="cfg-field">
+    <label class="cfg-label">Assignment instructions</label>
+    <textarea id="cfg-instructions" class="cfg-textarea" rows="4" placeholder="Write your assignment instructions here. Describe the task, the topic options, and what you expect students to do. Students will see this before they start their conversation.">{{ assignment.instructions or '' }}</textarea>
+  </div>
+
+  <!-- Section editor -->
+  <div class="section-editor">
+    <div class="section-editor-label">Assignment structure</div>
+    <div id="sections-container"></div>
+  </div>
+
+  <div style="display:flex;align-items:center;gap:10px;margin-top:12px;">
+    <button class="btn btn-primary" onclick="saveAssignmentConfig()">Save changes</button>
+    <span id="cfg-status" style="display:none;font-size:11px;color:var(--pill-green-text);">&#10003; Saved</span>
+    <span id="cfg-error" style="display:none;font-size:11px;color:var(--text-orange);"></span>
+  </div>
+</div>
+
+<!-- Reflection questions configuration -->
+<div class="card" style="margin-bottom:12px;">
+  <div style="font-size:12px;font-weight:500;color:var(--text-secondary);margin-bottom:12px;">Reflection questions</div>
+  {% for n in [1, 2, 3] %}
+  <div class="cfg-field" style="border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:8px;background:var(--bg-surface);">
+    <div style="font-size:10px;font-weight:600;color:var(--text-orange);margin-bottom:6px;">QUESTION {{ n }}</div>
+    <div class="cfg-field" style="margin-bottom:6px;">
+      <label class="cfg-label">Question text</label>
+      <textarea id="rq{{ n }}-question" class="cfg-textarea" rows="2">{{ reflection_config['question_' ~ n] }}</textarea>
+    </div>
+    <div class="cfg-field" style="margin-bottom:0;">
+      <label class="cfg-label">Hint (optional)</label>
+      <input type="text" id="rq{{ n }}-hint" class="cfg-input" value="{{ reflection_config['hint_' ~ n] }}" />
+    </div>
+  </div>
+  {% endfor %}
+  <div style="display:flex;align-items:center;gap:10px;margin-top:4px;">
+    <button class="btn btn-primary" onclick="saveReflectionConfig()">Save questions</button>
+    <span id="rq-status" style="display:none;font-size:11px;color:var(--pill-green-text);">&#10003; Saved</span>
+    <span id="rq-error" style="display:none;font-size:11px;color:var(--text-orange);"></span>
+  </div>
+</div>
+
+<!-- Students -->
+<div class="card">
+  <div style="font-size:12px;font-weight:500;color:var(--text-secondary);margin-bottom:12px;">Students</div>
+  {% for row in rows %}
+  <div class="student-row">
+    <div class="avatar">{{ row.initials }}</div>
+    <div class="student-name">{{ row.student.name }}</div>
+    {% if row.has_feedback %}
+    <span title="Instructor feedback given" style="font-size:14px;color:var(--text-orange);flex-shrink:0;" class="ti ti-message-circle"></span>
+    {% endif %}
+    <div class="score-bar-wrap">
+      <div class="score-bar-fill" style="width:{{ row.overall_score or 0 }}%;"></div>
+    </div>
+    <div class="score-num">{{ row.overall_score if row.overall_score is not none else '—' }}</div>
+    <span class="pill pill-depth-{{ row.depth_label }}" style="min-width:68px;justify-content:center;">
+      {{ row.depth_label }}
+    </span>
+    <a href="{{ url_for('instructor.log', student_id=row.student.id) }}" class="btn" style="flex-shrink:0;">
+      View log
+    </a>
+  </div>
+  {% else %}
+  <p style="font-size:13px;color:var(--text-tertiary);padding:16px 0;">No students enrolled yet.</p>
+  {% endfor %}
+</div>
+{% endblock %}
+
+{% block page_scripts %}
+<script>
+  const MODALITY_SECTIONS = {{ sections_defaults | tojson }};
+  const savedSections = {{ sections | tojson }};
+
+  function renderSections(sectionsArr) {
+    const container = document.getElementById('sections-container');
+    container.innerHTML = sectionsArr.map((s, i) => `
+      <div class="section-row-edit" data-id="${escHtml(s.id)}">
+        <div class="row-num">SECTION ${i + 1}</div>
+        <div class="section-field-grid">
+          <div>
+            <label class="cfg-label">Title</label>
+            <input type="text" class="cfg-input section-title" value="${escHtml(s.title)}" />
+          </div>
+          <div>
+            <label class="cfg-label">Placeholder text</label>
+            <input type="text" class="cfg-input section-placeholder" value="${escHtml(s.placeholder)}" />
+          </div>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function onModalityChange(modality) {
+    renderSections(MODALITY_SECTIONS[modality] || []);
+  }
+
+  function escHtml(str) {
+    return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function collectSections() {
+    const rows = document.querySelectorAll('.section-row-edit');
+    return Array.from(rows).map(row => ({
+      id: row.dataset.id,
+      title: row.querySelector('.section-title').value.trim(),
+      placeholder: row.querySelector('.section-placeholder').value.trim(),
+    }));
+  }
+
+  async function saveAssignmentConfig() {
+    const modality     = document.getElementById('cfg-modality').value;
+    const instructions = document.getElementById('cfg-instructions').value.trim();
+    const sections     = collectSections();
+    const statusEl     = document.getElementById('cfg-status');
+    const errorEl      = document.getElementById('cfg-error');
+    statusEl.style.display = 'none';
+    errorEl.style.display  = 'none';
+    try {
+      const resp = await fetch('{{ url_for("instructor.assignment_config") }}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ modality, instructions, sections_config: sections }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || 'Save failed');
+      statusEl.style.display = 'inline';
+      setTimeout(() => { statusEl.style.display = 'none'; }, 3000);
+    } catch (err) {
+      errorEl.textContent   = err.message;
+      errorEl.style.display = 'inline';
+    }
+  }
+
+  // Init: render saved sections (or defaults for current modality)
+  renderSections(savedSections.length ? savedSections : (MODALITY_SECTIONS[document.getElementById('cfg-modality').value] || []));
+
+  async function saveReflectionConfig() {
+    const statusEl = document.getElementById('rq-status');
+    const errorEl  = document.getElementById('rq-error');
+    statusEl.style.display = 'none';
+    errorEl.style.display  = 'none';
+    const body = {
+      question_1: document.getElementById('rq1-question').value.trim(),
+      question_2: document.getElementById('rq2-question').value.trim(),
+      question_3: document.getElementById('rq3-question').value.trim(),
+      hint_1: document.getElementById('rq1-hint').value.trim(),
+      hint_2: document.getElementById('rq2-hint').value.trim(),
+      hint_3: document.getElementById('rq3-hint').value.trim(),
+    };
+    try {
+      const resp = await fetch('{{ url_for("instructor.reflection_config") }}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || 'Save failed');
+      statusEl.style.display = 'inline';
+      setTimeout(() => { statusEl.style.display = 'none'; }, 3000);
+    } catch (err) {
+      errorEl.textContent  = err.message;
+      errorEl.style.display = 'inline';
+    }
+  }
+</script>
+{% endblock %}

@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Reflection — {{ student.name }} — Co-Intelligence{% endblock %}
+
+{% block page_styles %}
+<style>
+  .q-card { margin-bottom:10px; }
+  .q-label { font-size:13px; font-weight:500; color:var(--text-secondary); margin-bottom:6px; }
+  .q-answer { font-size:15px; color:var(--text-primary); line-height:1.7; }
+</style>
+{% endblock %}
+
+{% block sidebar %}{% include "instructor/_student_sidebar.html" %}{% endblock %}
+
+{% block content %}
+<div style="margin-bottom:16px;">
+  <h1 class="page-title">Metacognitive reflection &mdash; {{ student.name }}</h1>
+  <div class="page-sub">{{ course.name }} &middot; {{ assignment.title }}</div>
+</div>
+
+{% if reflection %}
+<div class="card q-card">
+  <div class="q-label">Q1 — {{ questions['question_1'] }}</div>
+  <div class="q-answer">{{ reflection.question_1 }}</div>
+</div>
+<div class="card q-card">
+  <div class="q-label">Q2 — {{ questions['question_2'] }}</div>
+  <div class="q-answer">{{ reflection.question_2 }}</div>
+</div>
+<div class="card q-card">
+  <div class="q-label">Q3 — {{ questions['question_3'] }}</div>
+  <div class="q-answer">{{ reflection.question_3 }}</div>
+</div>
+<div style="font-size:11px;color:var(--text-tertiary);margin-top:8px;">
+  Submitted {{ reflection.submitted_at.strftime('%b %d, %Y at %H:%M') }}
+</div>
+{% else %}
+<div class="card" style="text-align:center;padding:40px 0;color:var(--text-tertiary);font-size:12px;">
+  No reflection submitted yet.
+</div>
+{% endif %}
+{% endblock %}

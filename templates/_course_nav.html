@@ -1,0 +1,13 @@
+{% if all_courses and all_courses | length > 1 %}
+<div class="sidebar-section" style="margin-top:8px;">Courses</div>
+{% for c in all_courses %}
+<a href="{{ url_for('switch_course', course_id=c.id) }}"
+   class="sidebar-item{% if c.id == current_course_id %} active{% endif %}"
+   style="font-size:15px;font-weight:500;{% if c.id == current_course_id %}border-left:3px solid {{ course_color }};border-radius:0 8px 8px 0;padding-left:7px;{% endif %}">
+  <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24">
+    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+  </svg>
+  {{ c.name }}
+</a>
+{% endfor %}
+{% endif %}

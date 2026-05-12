@@ -1,0 +1,228 @@
+{% extends "base.html" %}
+{% block title %}Assignment — Co-Intelligence{% endblock %}
+
+{% block page_styles %}
+<style>
+  .modality-label {
+    display:inline-flex; align-items:center; gap:6px; font-size:11px;
+    color:var(--text-secondary); background:var(--bg-surface);
+    border:1px solid var(--border); border-radius:6px; padding:4px 10px;
+  }
+  .locked-overlay { text-align:center; padding:40px 20px; color:var(--text-tertiary); }
+  .locked-overlay p { font-size:13px; line-height:1.6; max-width:320px; margin:0 auto; }
+  .action-row { display:flex; gap:8px; margin-top:16px; justify-content:flex-end; }
+  .save-status { font-size:11px; color:var(--pill-green-text); align-self:center; margin-right:auto; display:none; }
+
+  /* Suggestion cards */
+  .suggestions-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+  @media (max-width:700px) { .suggestions-grid { grid-template-columns:1fr; } }
+  .suggestion-card {
+    border:1px solid var(--border); border-radius:10px; padding:12px 14px;
+    background:var(--bg-primary);
+  }
+  .suggestion-num { font-size:10px; font-weight:600; color:var(--text-orange); letter-spacing:.06em; margin-bottom:5px; }
+  .suggestion-title { font-size:12px; font-weight:500; color:var(--text-primary); margin-bottom:5px; }
+  .suggestion-text { font-size:11px; color:var(--text-secondary); line-height:1.6; }
+
+  .suggestion-skeleton { height:80px; border-radius:10px; background:var(--bg-surface);
+    animation:skeleton-pulse 1.4s ease-in-out infinite; }
+  @keyframes skeleton-pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+  /* Section writing area */
+  .section-label {
+    font-size:11px; font-weight:600; color:var(--text-secondary);
+    text-transform:uppercase; letter-spacing:.06em; margin-bottom:6px;
+  }
+  .workspace-note {
+    background:var(--bg-surface); border-left:3px solid var(--accent);
+    border-radius:0 8px 8px 0; padding:10px 14px; font-size:12px;
+    color:var(--text-secondary); line-height:1.6; margin-bottom:14px;
+  }
+</style>
+{% endblock %}
+
+{% block sidebar %}
+<nav class="sidebar">
+  <div class="sidebar-section">Workflow</div>
+  <a href="{{ url_for('student.prompting') }}"
+     class="sidebar-item{% if request.endpoint == 'student.prompting' %} active{% endif %}">
+    <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+    Dialogic prompting
+  </a>
+  <a href="{{ url_for('student.assignment') }}"
+     class="sidebar-item{% if request.endpoint == 'student.assignment' %} active{% endif %}">
+    <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+    Assignment
+  </a>
+  <a href="{{ url_for('student.reflection') }}"
+     class="sidebar-item{% if request.endpoint == 'student.reflection' %} active{% endif %}">
+    <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    Reflection
+  </a>
+  {% include "_course_nav.html" %}
+</nav>
+{% endblock %}
+
+{% block content %}
+<div style="margin-bottom:16px;">
+  <h1 class="page-title">Assignment</h1>
+  <div class="page-sub">{{ course.name }} &middot; {{ assignment.title }}</div>
+</div>
+
+{% if not unlocked %}
+<div class="card">
+  <div class="locked-overlay">
+    <i class="ti ti-lock" style="font-size:28px;margin-bottom:12px;display:block;color:var(--text-tertiary);"></i>
+    <p>
+      Complete at least <strong>{{ min_exchanges }} exchanges</strong> in the prompting phase
+      before writing your assignment.<br><br>
+      You have completed <strong>{{ exchange_count }}</strong> so far.
+      <strong>{{ min_exchanges - exchange_count }}</strong> more to go.
+    </p>
+    <div style="margin-top:18px;">
+      <a href="{{ url_for('student.prompting') }}" class="btn btn-primary">Back to prompting</a>
+    </div>
+  </div>
+</div>
+
+{% else %}
+
+{% set modality_icons = {
+  "critical analysis": "ti-file-text",
+  "podcast script": "ti-microphone",
+  "interactive game design": "ti-device-gamepad",
+  "presentation outline": "ti-presentation",
+  "video script": "ti-video"
+} %}
+
+<!-- Deliverable format badge -->
+<div class="card" style="margin-bottom:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+  <div style="font-size:12px;font-weight:500;color:var(--text-secondary);flex-shrink:0;">Deliverable format</div>
+  <div class="modality-label">
+    <i class="ti {{ modality_icons.get(assignment.modality, 'ti-file-text') }}" style="font-size:14px;"></i>
+    {{ assignment.modality | title if assignment.modality else 'Not set' }}
+  </div>
+  {% if assignment.instructions %}
+  <div style="font-size:11px;color:var(--text-tertiary);flex:1;min-width:200px;">{{ assignment.instructions }}</div>
+  {% endif %}
+</div>
+
+<!-- Suggestion cards — loaded asynchronously -->
+<div id="suggestions-wrap" style="margin-bottom:12px;">
+  <div class="card">
+    <div style="font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;">
+      Suggested starting points based on your conversation
+    </div>
+    <div style="font-size:11px;color:var(--text-tertiary);margin-bottom:10px;">
+      Based on threads you introduced — not what AI said. Use these as prompts, not content to copy.
+    </div>
+    <div id="suggestions-skeleton" class="suggestions-grid">
+      <div class="suggestion-skeleton"></div>
+      <div class="suggestion-skeleton"></div>
+      <div class="suggestion-skeleton"></div>
+    </div>
+    <div id="suggestions-content" class="suggestions-grid" style="display:none;"></div>
+    <div id="suggestions-empty" style="display:none;font-size:12px;color:var(--text-tertiary);">
+      Complete more exchanges to generate suggestions.
+    </div>
+  </div>
+</div>
+
+<!-- Writing workspace -->
+<div class="workspace-note">
+  This is your analysis. Use your conversation with AI as a thinking partner, but every idea here should be yours.
+</div>
+
+{% for section in sections %}
+<div class="card" style="margin-bottom:10px;">
+  <div class="section-label">{{ section.title }}</div>
+  <textarea
+    id="section-{{ section.id }}"
+    data-section="{{ section.id }}"
+    rows="7"
+    placeholder="{{ section.placeholder }}"
+  >{{ (existing_output.content_sections or {}).get(section.id, '') if existing_output else '' }}</textarea>
+</div>
+{% endfor %}
+
+<div class="action-row">
+  <span class="save-status" id="save-status"></span>
+  <button class="btn" onclick="saveAssignment(false)">Save draft</button>
+  <button class="btn btn-primary" onclick="saveAssignment(true)">Submit assignment</button>
+</div>
+<div id="assignment-error" style="display:none;color:var(--text-orange);font-size:11px;margin-top:6px;text-align:right;"></div>
+
+{% endif %}
+{% endblock %}
+
+{% block page_scripts %}
+{% if unlocked %}
+<script>
+  // ── Suggestion cards ──────────────────────────────────────────────────────
+  (async function loadSuggestions() {
+    try {
+      const resp = await fetch('{{ url_for("student.assignment_suggestions") }}');
+      const data = await resp.json();
+      document.getElementById('suggestions-skeleton').style.display = 'none';
+
+      const suggestions = data.suggestions || [];
+      if (suggestions.length === 0) {
+        document.getElementById('suggestions-empty').style.display = 'block';
+        return;
+      }
+      const container = document.getElementById('suggestions-content');
+      container.innerHTML = suggestions.map((s, i) => `
+        <div class="suggestion-card">
+          <div class="suggestion-num">0${i + 1}</div>
+          <div class="suggestion-title">${escHtml(s.title || '')}</div>
+          <div class="suggestion-text">${escHtml(s.suggestion || '')}</div>
+        </div>
+      `).join('');
+      container.style.display = 'grid';
+    } catch (_) {
+      document.getElementById('suggestions-skeleton').style.display = 'none';
+      document.getElementById('suggestions-empty').style.display = 'block';
+    }
+  })();
+
+  function escHtml(str) {
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // ── Assignment save ───────────────────────────────────────────────────────
+  async function saveAssignment(isSubmit) {
+    const errorEl  = document.getElementById('assignment-error');
+    const statusEl = document.getElementById('save-status');
+    errorEl.style.display = 'none';
+
+    const sections = {};
+    document.querySelectorAll('[data-section]').forEach(el => {
+      sections[el.dataset.section] = el.value.trim();
+    });
+
+    const hasContent = Object.values(sections).some(v => v.length > 0);
+    if (!hasContent) {
+      errorEl.textContent = 'Please write at least one section before saving.';
+      errorEl.style.display = 'block';
+      return;
+    }
+
+    try {
+      const resp = await fetch('{{ url_for("student.assignment") }}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sections }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || 'Save failed');
+      statusEl.style.display = 'inline';
+      statusEl.textContent = isSubmit ? '\u2713 Submitted' : '\u2713 Saved';
+      setTimeout(() => { statusEl.style.display = 'none'; }, 3000);
+    } catch (err) {
+      errorEl.textContent = err.message;
+      errorEl.style.display = 'block';
+    }
+  }
+</script>
+{% endif %}
+{% endblock %}

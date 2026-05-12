@@ -1,0 +1,17 @@
+
+python app.py
+x
+ANTHROPIC_API_KEY=sk-ant-api03 l5kGPJk_3nkEpbT_uzypkRGPxBzer8RCSlFFER97MOc4ZJacLmFfq6BiB4lPB62FeRk8phLCB1EYrMRk_tEoYQ-WCLbIwAA
+
+ANTHROPIC_API_KEY=your_key_here
+FLASK_ENV=development
+FLASK_DEBUG=1
+SECRET_KEY=change-this-secret-key
+ANTHROPIC_API_KEY=sk-ant-api03 l5kGPJk_3nkEpbT_uzypkRGPxBzer8RCSlFFER97MOc4ZJacLmFfq6BiB4lPB62FeRk8phLCB1EYrMRk_tEoYQ-WCLbIwAA
+ANTHROPIC_API_KEY=sk-ant-api03 l5kGPJk_3nkEpbT_uzypkRGPxBzer8RCSlFFER97MOc4ZJacLmFfq6BiB4lPB62FeRk8phLCB1EYrMRk_tEoYQ-WCLbIwAA
+ nano /Users/gamzeyilmaz/co-intel/.env
+ nano /Users/gamzeyilmaz/co-intel/.env
+open -e /Users/gamzeyilmaz/co-intel/.env 
+
+ANTHROPIC_API_KEY=sk-ant-api03 l5kGPJk_3nkEpbT_uzypkRGPxBzer8RCSlFFER97MOc4ZJacLmFfq6BiB4lPB62FeRk8phLCB1EYrMRk_tE$
+

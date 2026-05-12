@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}Co-Intelligence{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css" />
+  <style>
+    /* ---- Topbar view toggles ---- */
+    .topbar-toggles {
+      display: flex;
+      gap: 2px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 2px;
+    }
+    .topbar-toggle {
+      font-size: 13px;
+      padding: 6px 14px;
+      border-radius: 6px;
+      border: none;
+      background: transparent;
+      color: var(--text-secondary);
+      cursor: pointer;
+      text-decoration: none;
+      font-family: inherit;
+      transition: background .12s, color .12s;
+      white-space: nowrap;
+    }
+    .topbar-toggle:hover {
+      color: var(--text-primary);
+    }
+    .topbar-toggle.active {
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      border: 1px solid var(--border);
+    }
+    /* ---- User avatar ---- */
+    .topbar-user {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .user-avatar {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: var(--bg-orange-light);
+      color: var(--text-orange);
+      font-size: 10px;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .user-name {
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+  </style>
+  <style>
+    :root {
+      --accent:           {{ course_color }};
+      --bg-orange-light:  {{ course_color_light }};
+      --text-orange:      {{ course_color_text }};
+      --course-accent:    {{ course_color }};
+    }
+    .btn-primary:hover { background: {{ course_color_hover }}; border-color: {{ course_color_hover }}; }
+    .content { border-top: 4px solid var(--course-accent); }
+  </style>
+  {% block page_styles %}{% endblock %}
+</head>
+<body>
+
+{% set is_student    = request.path.startswith('/student') %}
+{% set is_instructor = request.path.startswith('/instructor') %}
+
+{% if is_student %}
+  {% set _user_name     = "Alex M." %}
+  {% set _user_initials = "AM" %}
+{% else %}
+  {% set _user_name     = "Instructor" %}
+  {% set _user_initials = "IN" %}
+{% endif %}
+
+<div class="app">
+
+  <!-- ======= Topbar ======= -->
+  <div class="topbar">
+
+    <a class="logo" href="/">
+      <span class="logo-dot"></span>
+      Co-Intelligence
+    </a>
+
+    <div class="topbar-toggles">
+      <a href="{{ url_for('student.prompting') }}"
+         class="topbar-toggle{% if is_student %} active{% endif %}">
+        Student view
+      </a>
+      <a href="{{ url_for('instructor.dashboard') }}"
+         class="topbar-toggle{% if is_instructor %} active{% endif %}">
+        Instructor view
+      </a>
+    </div>
+
+    <div class="topbar-user">
+      <div class="user-avatar">{{ _user_initials }}</div>
+      <span class="user-name">{{ _user_name }}</span>
+      <a href="{{ url_for('login') }}" style="font-size:12px;color:var(--text-tertiary);text-decoration:none;margin-left:6px;">Sign out</a>
+    </div>
+
+  </div><!-- /.topbar -->
+
+  <div class="main">
+
+    <!-- Sidebar: overridden by each child template -->
+    {% block sidebar %}{% endblock %}
+
+    <!-- Main content area -->
+    <div class="content">
+      {% block content %}{% endblock %}
+    </div>
+
+  </div><!-- /.main -->
+</div><!-- /.app -->
+
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+{% block page_scripts %}{% endblock %}
+</body>
+</html>

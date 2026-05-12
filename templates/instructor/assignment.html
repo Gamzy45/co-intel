@@ -1,0 +1,239 @@
+{% extends "base.html" %}
+{% block title %}Final assignment — {{ student.name }} — Co-Intelligence{% endblock %}
+
+{% block page_styles %}
+<style>
+  .metric-grid-3 { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:14px; }
+  .modality-badge { display:inline-flex; align-items:center; gap:5px; font-size:11px; color:var(--text-secondary); margin-bottom:10px; }
+
+  /* Annotation legend */
+  .ann-legend { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px; }
+  .ann-legend-item { display:flex; align-items:center; gap:5px; font-size:11px; color:var(--text-secondary); }
+  .ann-swatch { width:12px; height:12px; border-radius:2px; flex-shrink:0; }
+
+  /* Annotated text */
+  .annotated-text { font-size:13px; line-height:1.9; color:var(--text-primary); white-space:pre-wrap; word-break:break-word; }
+  mark.ann-student_original { background:#dcfce7; border-radius:2px; padding:1px 2px; cursor:help; }
+  mark.ann-student_concept  { background:#ffedd5; border-radius:2px; padding:1px 2px; cursor:help; }
+  mark.ann-ai_idea          { background:#f1f5f9; border-radius:2px; padding:1px 2px; cursor:help; }
+  mark.ann-ai_source        { background:#dbeafe; border-radius:2px; padding:1px 2px; cursor:help; }
+  mark.ann-student_pushback { background:#f3e8ff; border-radius:2px; padding:1px 2px; cursor:help; }
+
+  /* Score breakdown */
+  .score-breakdown { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; margin-top:14px; }
+  .score-item { background:var(--bg-surface); border-radius:10px; padding:12px 14px; }
+  .score-item-val { font-size:22px; font-weight:500; color:var(--text-primary); margin-bottom:3px; }
+  .score-item-label { font-size:11px; font-weight:500; color:var(--text-secondary); margin-bottom:4px; }
+  .score-item-feedback { font-size:11px; color:var(--text-tertiary); line-height:1.55; }
+
+  /* Section display (non-annotated) */
+  .section-block { margin-bottom:16px; }
+  .section-block-title { font-size:11px; font-weight:600; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.05em; margin-bottom:6px; }
+  .section-block-content { font-size:13px; color:var(--text-primary); line-height:1.7; white-space:pre-wrap; }
+
+  /* Loading */
+  .loading-state { text-align:center; padding:50px 20px; }
+  .spinner { width:32px; height:32px; border-radius:50%; margin:0 auto 14px; border:3px solid var(--border); border-top-color:var(--accent); animation:spin 0.8s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .loading-label { font-size:13px; color:var(--text-secondary); margin-bottom:3px; }
+  .loading-sub   { font-size:11px; color:var(--text-tertiary); }
+</style>
+{% endblock %}
+
+{% block sidebar %}{% include "instructor/_student_sidebar.html" %}{% endblock %}
+
+{% block content %}
+<div style="margin-bottom:16px;">
+  <h1 class="page-title">Final assignment &mdash; {{ student.name }}</h1>
+  <div class="page-sub">
+    {{ course.name }} &middot; {{ assignment.title }}
+    {% if output and output.analysis_generated_at %}
+      &middot; Analysis generated {{ output.analysis_generated_at.strftime('%b %d, %Y') }}
+    {% endif %}
+  </div>
+</div>
+
+<div class="metric-grid-3">
+  <div class="metric-card">
+    <div class="metric-label">Concepts applied</div>
+    <div class="metric-val">{{ concepts_count }}</div>
+    <div class="metric-sub">unique concepts</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-label">Total exchanges</div>
+    <div class="metric-val">{{ exchange_count }}</div>
+    <div class="metric-sub">in prompting session</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-label">Pushback moments</div>
+    <div class="metric-val">{{ pushback_count }}</div>
+    <div class="metric-sub">critical challenges</div>
+  </div>
+</div>
+
+{% if not output %}
+<div class="card" style="text-align:center;padding:40px 0;color:var(--text-tertiary);font-size:12px;">
+  No assignment submitted yet.
+</div>
+
+{% elif generating_analysis %}
+<!-- ======= Analysis loading state ======= -->
+<div class="card" id="analysis-loading-card">
+  <div class="loading-state">
+    <div class="spinner"></div>
+    <div class="loading-label">Generating authorship analysis…</div>
+    <div class="loading-sub">Comparing submission against the prompting log. This takes 10–20 seconds.</div>
+  </div>
+</div>
+
+{% else %}
+<!-- ======= Annotated assignment view ======= -->
+<div class="card" style="margin-bottom:12px;">
+  <div style="font-size:12px;font-weight:500;color:var(--text-secondary);margin-bottom:10px;">
+    Authorship analysis
+  </div>
+
+  <!-- Legend -->
+  <div class="ann-legend">
+    <div class="ann-legend-item"><div class="ann-swatch" style="background:#dcfce7;"></div> Student original idea</div>
+    <div class="ann-legend-item"><div class="ann-swatch" style="background:#ffedd5;"></div> Course concept applied</div>
+    <div class="ann-legend-item"><div class="ann-swatch" style="background:#f1f5f9;border:1px solid #e2e8f0;"></div> AI-generated idea</div>
+    <div class="ann-legend-item"><div class="ann-swatch" style="background:#dbeafe;"></div> AI-generated source</div>
+    <div class="ann-legend-item"><div class="ann-swatch" style="background:#f3e8ff;"></div> Student pushback</div>
+  </div>
+
+  <!-- Annotated text built by JS -->
+  <div class="annotated-text" id="annotated-display"></div>
+</div>
+
+<!-- Score breakdown -->
+{% set analysis = output.analysis_json or {} %}
+<div class="card">
+  <div style="font-size:12px;font-weight:500;color:var(--text-secondary);margin-bottom:4px;">Scoring breakdown</div>
+  <div style="font-size:11px;color:var(--text-tertiary);margin-bottom:12px;">Each score is out of 100.</div>
+  <div class="score-breakdown">
+    <div class="score-item">
+      <div class="score-item-val">{{ analysis.get('originality_score', '—') }}</div>
+      <div class="score-item-label">Student-originated ideas</div>
+      <div class="score-item-feedback">{{ analysis.get('originality_feedback', '') }}</div>
+    </div>
+    <div class="score-item">
+      <div class="score-item-val">{{ analysis.get('new_info_score', '—') }}</div>
+      <div class="score-item-label">New information added</div>
+      <div class="score-item-feedback">{{ analysis.get('new_info_feedback', '') }}</div>
+    </div>
+    <div class="score-item">
+      <div class="score-item-val">{{ analysis.get('elaboration_score', '—') }}</div>
+      <div class="score-item-label">Depth of elaboration</div>
+      <div class="score-item-feedback">{{ analysis.get('elaboration_feedback', '') }}</div>
+    </div>
+    <div class="score-item">
+      <div class="score-item-val">{{ analysis.get('concept_score', '—') }}</div>
+      <div class="score-item-label">Course concept integration</div>
+      <div class="score-item-feedback">{{ analysis.get('concept_feedback', '') }}</div>
+    </div>
+  </div>
+</div>
+
+{% endif %}
+{% endblock %}
+
+{% block page_scripts %}
+{% if output and generating_analysis %}
+<script>
+  (async function () {
+    try {
+      const resp = await fetch(
+        '{{ url_for("instructor.assignment_analyze", student_id=student.id) }}',
+        { method: 'POST' }
+      );
+      const data = await resp.json();
+      if (data.success) {
+        location.reload();
+      } else {
+        document.querySelector('.loading-label').textContent = 'Error: ' + (data.error || 'Analysis failed.');
+        document.querySelector('.spinner').style.display = 'none';
+      }
+    } catch (err) {
+      document.querySelector('.loading-label').textContent = 'Network error — please refresh the page.';
+      document.querySelector('.spinner').style.display = 'none';
+    }
+  })();
+</script>
+
+{% elif output and not generating_analysis %}
+<script>
+  // Build annotated text from segment data
+  const segments = {{ (output.analysis_json or {}).get('segments', []) | tojson }};
+
+  // Build the full plain text from sections
+  const contentSections = {{ (output.content_sections or {}) | tojson }};
+  const sectionDefs = {{ sections | tojson }};
+
+  function buildFullText() {
+    if (Object.keys(contentSections).length > 0) {
+      return sectionDefs
+        .map(s => {
+          const content = (contentSections[s.id] || '').trim();
+          return content ? s.title + '\n' + content : '';
+        })
+        .filter(Boolean)
+        .join('\n\n');
+    }
+    // Legacy plain text
+    return {{ (output.content or '') | tojson }};
+  }
+
+  function escHtml(str) {
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function renderAnnotated(fullText, segs) {
+    if (!segs || segs.length === 0) {
+      return escHtml(fullText).replace(/\n/g, '<br>');
+    }
+
+    const lower = fullText.toLowerCase();
+    const intervals = [];
+
+    for (const seg of segs) {
+      if (!seg.text || seg.text.length < 3) continue;
+      const idx = lower.indexOf(seg.text.toLowerCase().trim());
+      if (idx >= 0) {
+        intervals.push({
+          start: idx,
+          end: idx + seg.text.trim().length,
+          type: seg.type,
+          explanation: seg.explanation || '',
+        });
+      }
+    }
+
+    intervals.sort((a, b) => a.start - b.start);
+
+    // Remove overlaps
+    const clean = [];
+    let cursor = 0;
+    for (const iv of intervals) {
+      if (iv.start >= cursor) {
+        clean.push(iv);
+        cursor = iv.end;
+      }
+    }
+
+    let html = '';
+    cursor = 0;
+    for (const iv of clean) {
+      html += escHtml(fullText.slice(cursor, iv.start)).replace(/\n/g, '<br>');
+      html += `<mark class="ann-${iv.type}" title="${escHtml(iv.explanation)}">${escHtml(fullText.slice(iv.start, iv.end)).replace(/\n/g, '<br>')}</mark>`;
+      cursor = iv.end;
+    }
+    html += escHtml(fullText.slice(cursor)).replace(/\n/g, '<br>');
+    return html;
+  }
+
+  const fullText = buildFullText();
+  document.getElementById('annotated-display').innerHTML = renderAnnotated(fullText, segments);
+</script>
+{% endif %}
+{% endblock %}

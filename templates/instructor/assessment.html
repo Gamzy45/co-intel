@@ -1,0 +1,265 @@
+{% extends "base.html" %}
+{% block title %}Assessment — {{ student.name }} — Co-Intelligence{% endblock %}
+
+{% block page_styles %}
+<style>
+  /* Score ring */
+  .ring-wrap { display:flex; align-items:center; gap:14px; padding:12px 0; border-bottom:1px solid var(--border); }
+  .ring-wrap:last-child { border-bottom:none; }
+  .score-ring {
+    width:52px; height:52px; border-radius:50%; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center; position:relative;
+    background:conic-gradient(var(--accent) calc(var(--pct,0)*1%), var(--border) 0);
+  }
+  .score-ring::after { content:''; position:absolute; width:36px; height:36px; border-radius:50%; background:var(--bg-primary); }
+  .score-ring-val { position:relative; z-index:1; font-size:12px; font-weight:500; color:var(--text-primary); }
+  /* Large ring */
+  .score-ring-lg {
+    width:96px; height:96px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center; position:relative;
+    background:conic-gradient(var(--accent) calc(var(--pct,0)*1%), var(--border) 0);
+    margin:0 auto 16px;
+  }
+  .score-ring-lg::after { content:''; position:absolute; width:68px; height:68px; border-radius:50%; background:var(--bg-primary); }
+  .score-ring-lg-val { position:relative; z-index:1; font-size:22px; font-weight:500; color:var(--text-primary); }
+
+  .ring-label    { font-size:12px; font-weight:500; color:var(--text-primary); margin-bottom:3px; }
+  .ring-feedback { font-size:12px; color:var(--text-secondary); line-height:1.55; }
+  .metric-grid-3 { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:14px; }
+  .tab-panel { display:none; }
+  .tab-panel.active { display:block; }
+  .overall-summary { text-align:center; padding:16px 0 20px; border-bottom:1px solid var(--border); margin-bottom:14px; }
+  .overall-feedback-text { font-size:13px; color:var(--text-secondary); line-height:1.6; max-width:500px; margin:0 auto; }
+  .export-row { display:flex; gap:8px; margin-top:14px; }
+
+  /* Loading state */
+  .loading-state { text-align:center; padding:60px 20px; }
+  .spinner {
+    width:36px; height:36px; border-radius:50%; margin:0 auto 16px;
+    border:3px solid var(--border); border-top-color:var(--accent);
+    animation:spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .loading-label { font-size:13px; color:var(--text-secondary); margin-bottom:4px; }
+  .loading-sub   { font-size:11px; color:var(--text-tertiary); }
+</style>
+{% endblock %}
+
+{% block sidebar %}{% include "instructor/_student_sidebar.html" %}{% endblock %}
+
+{% block content %}
+<div style="margin-bottom:16px;">
+  <h1 class="page-title">AI assessment &mdash; {{ student.name }}</h1>
+  <div class="page-sub" style="display:flex;align-items:center;gap:8px;">
+    {{ course.name }} &middot; {{ assignment.title }}
+    {% if score and score.generated_at %}
+      &middot; Generated {{ score.generated_at.strftime('%b %d, %Y') }}
+    {% endif %}
+    <span class="pill pill-orange">AI generated</span>
+  </div>
+</div>
+
+{% if generating %}
+<!-- ======= Loading state ======= -->
+<div class="card" id="loading-card">
+  <div class="loading-state">
+    <div class="spinner"></div>
+    <div class="loading-label">Generating AI assessment…</div>
+    <div class="loading-sub">Analysing exchanges, reflection, and concept usage. This takes about 10–20 seconds.</div>
+  </div>
+</div>
+
+{% else %}
+<!-- ======= Score tabs ======= -->
+<div class="tab-row">
+  <button class="tab active" onclick="switchTab('prompting', this)">Prompting engagement</button>
+  <button class="tab" onclick="switchTab('reflection', this)">Reflection depth</button>
+  <button class="tab" onclick="switchTab('overall', this)">Overall co-intelligence score</button>
+</div>
+
+<!-- TAB 1: Prompting -->
+<div class="tab-panel active" id="tab-prompting">
+  <div class="metric-grid-3">
+    <div class="metric-card">
+      <div class="metric-label">Concept score</div>
+      <div class="metric-val">{{ score.concept_score if score.concept_score is not none else '—' }}</div>
+      <div class="metric-sub">out of 100</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Dialogic depth</div>
+      <div class="metric-val">{{ score.depth_score if score.depth_score is not none else '—' }}</div>
+      <div class="metric-sub">out of 100</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Pushback quality</div>
+      <div class="metric-val">{{ score.pushback_score if score.pushback_score is not none else '—' }}</div>
+      <div class="metric-sub">out of 100</div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="ring-wrap">
+      <div class="score-ring" style="--pct:{{ score.concept_score or 0 }};"><span class="score-ring-val">{{ score.concept_score or '—' }}</span></div>
+      <div><div class="ring-label">Concept breadth and accuracy</div><div class="ring-feedback">{{ score.concept_feedback or 'No feedback available.' }}</div></div>
+    </div>
+    <div class="ring-wrap">
+      <div class="score-ring" style="--pct:{{ score.depth_score or 0 }};"><span class="score-ring-val">{{ score.depth_score or '—' }}</span></div>
+      <div><div class="ring-label">Analytical depth across exchanges</div><div class="ring-feedback">{{ score.depth_feedback or 'No feedback available.' }}</div></div>
+    </div>
+    <div class="ring-wrap">
+      <div class="score-ring" style="--pct:{{ score.pushback_score or 0 }};"><span class="score-ring-val">{{ score.pushback_score or '—' }}</span></div>
+      <div><div class="ring-label">Critical engagement and pushback</div><div class="ring-feedback">{{ score.pushback_feedback or 'No feedback available.' }}</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- TAB 2: Reflection -->
+<div class="tab-panel" id="tab-reflection">
+  <div class="metric-grid-3">
+    <div class="metric-card">
+      <div class="metric-label">Q1 score</div>
+      <div class="metric-val">{{ score.reflection_q1_score if score.reflection_q1_score is not none else '—' }}</div>
+      <div class="metric-sub">course knowledge</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Q2 score</div>
+      <div class="metric-val">{{ score.reflection_q2_score if score.reflection_q2_score is not none else '—' }}</div>
+      <div class="metric-sub">changed thinking</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Q3 score</div>
+      <div class="metric-val">{{ score.reflection_q3_score if score.reflection_q3_score is not none else '—' }}</div>
+      <div class="metric-sub">personal knowledge</div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="ring-wrap">
+      <div class="score-ring" style="--pct:{{ score.reflection_q1_score or 0 }};"><span class="score-ring-val">{{ score.reflection_q1_score or '—' }}</span></div>
+      <div><div class="ring-label">Q1 — How did course knowledge shape AI direction?</div><div class="ring-feedback">{{ score.reflection_q1_feedback or 'No feedback available.' }}</div></div>
+    </div>
+    <div class="ring-wrap">
+      <div class="score-ring" style="--pct:{{ score.reflection_q2_score or 0 }};"><span class="score-ring-val">{{ score.reflection_q2_score or '—' }}</span></div>
+      <div><div class="ring-label">Q2 — How did working with AI change or deepen thinking?</div><div class="ring-feedback">{{ score.reflection_q2_feedback or 'No feedback available.' }}</div></div>
+    </div>
+    <div class="ring-wrap">
+      <div class="score-ring" style="--pct:{{ score.reflection_q3_score or 0 }};"><span class="score-ring-val">{{ score.reflection_q3_score or '—' }}</span></div>
+      <div><div class="ring-label">Q3 — Where did the student disagree with AI?</div><div class="ring-feedback">{{ score.reflection_q3_feedback or 'No feedback available.' }}</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- TAB 3: Overall -->
+<div class="tab-panel" id="tab-overall">
+  <div class="card" style="margin-bottom:12px;">
+    <div class="overall-summary">
+      <div class="score-ring-lg" style="--pct:{{ score.overall_score or 0 }};">
+        <span class="score-ring-lg-val">{{ score.overall_score if score.overall_score is not none else '—' }}</span>
+      </div>
+      <div class="overall-feedback-text">{{ score.overall_feedback or 'No overall feedback available.' }}</div>
+    </div>
+    <div class="metric-grid-3">
+      <div class="metric-card">
+        <div class="metric-label">Prompting score</div>
+        {% set p_avg = ((score.concept_score or 0) + (score.depth_score or 0) + (score.pushback_score or 0)) // 3 %}
+        <div class="metric-val">{{ p_avg }}</div>
+        <div class="metric-sub">concept · depth · pushback</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Reflection score</div>
+        <div class="metric-val">{{ score.reflection_score if score.reflection_score is not none else '—' }}</div>
+        <div class="metric-sub">avg Q1 · Q2 · Q3</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Overall score</div>
+        <div class="metric-val">{{ score.overall_score if score.overall_score is not none else '—' }}</div>
+        <div class="metric-sub">holistic judgment</div>
+      </div>
+    </div>
+    <div class="export-row">
+      <button class="btn" onclick="window.print()">Export report</button>
+    </div>
+  </div>
+</div>
+
+<!-- Instructor feedback -->
+<div class="card" style="margin-top:12px;">
+  <div style="font-size:12px;font-weight:500;color:var(--text-secondary);margin-bottom:8px;">Instructor feedback</div>
+  <div style="font-size:12px;color:var(--text-tertiary);margin-bottom:10px;line-height:1.5;">
+    Visible to the student on their prompting page. Use this to add a personal note alongside the AI assessment.
+  </div>
+  <textarea id="feedback-text" rows="4" maxlength="1000"
+    placeholder="Write feedback for this student…"
+    oninput="updateFeedbackCount()">{{ feedback.feedback_text if feedback else '' }}</textarea>
+  <div style="display:flex;align-items:center;gap:10px;margin-top:8px;">
+    <span id="feedback-count" style="font-size:11px;color:var(--text-tertiary);margin-right:auto;">
+      {{ (feedback.feedback_text | length) if feedback else 0 }} / 1000
+    </span>
+    <span id="feedback-timestamp" style="font-size:11px;color:var(--text-tertiary);">
+      {% if feedback %}Last saved {{ feedback.updated_at.strftime('%b %d at %H:%M') }}{% endif %}
+    </span>
+    <span id="feedback-status" style="display:none;font-size:11px;color:var(--pill-green-text);">&#10003; Saved</span>
+    <button class="btn btn-primary" onclick="saveFeedback()">Save feedback</button>
+  </div>
+  <div id="feedback-error" style="display:none;color:var(--text-orange);font-size:11px;margin-top:6px;"></div>
+</div>
+
+{% endif %}
+{% endblock %}
+
+{% block page_scripts %}
+{% if generating %}
+<script>
+  // Auto-trigger assessment generation, then reload to show results
+  (async function () {
+    try {
+      const resp = await fetch(
+        '{{ url_for("instructor.assessment_generate", student_id=student.id) }}',
+        { method: 'POST' }
+      );
+      const data = await resp.json();
+      if (data.success) {
+        location.reload();
+      } else {
+        document.querySelector('.loading-label').textContent = 'Error: ' + (data.error || 'Generation failed.');
+        document.querySelector('.spinner').style.display = 'none';
+      }
+    } catch (err) {
+      document.querySelector('.loading-label').textContent = 'Network error. Please refresh the page.';
+      document.querySelector('.spinner').style.display = 'none';
+    }
+  })();
+</script>
+{% else %}
+<script>
+  function updateFeedbackCount() {
+    const len = document.getElementById('feedback-text').value.length;
+    document.getElementById('feedback-count').textContent = len + ' / 1000';
+  }
+
+  async function saveFeedback() {
+    const text = document.getElementById('feedback-text').value.trim();
+    const errorEl = document.getElementById('feedback-error');
+    const statusEl = document.getElementById('feedback-status');
+    const tsEl = document.getElementById('feedback-timestamp');
+    errorEl.style.display = 'none';
+    if (!text) { errorEl.textContent = 'Feedback cannot be empty.'; errorEl.style.display = 'block'; return; }
+    try {
+      const resp = await fetch('{{ url_for("instructor.assessment_feedback", student_id=student.id) }}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ feedback_text: text }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || 'Save failed');
+      const now = new Date();
+      const formatted = now.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
+      tsEl.textContent = 'Last saved ' + formatted;
+      statusEl.style.display = 'inline';
+      setTimeout(() => { statusEl.style.display = 'none'; }, 3000);
+    } catch (err) {
+      errorEl.textContent = err.message;
+      errorEl.style.display = 'block';
+    }
+  }
+</script>
+{% endif %}
+{% endblock %}

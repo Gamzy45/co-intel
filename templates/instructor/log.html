@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Prompting log — {{ student.name }} — Co-Intelligence{% endblock %}
+
+{% block sidebar %}{% include "instructor/_student_sidebar.html" %}{% endblock %}
+
+{% block content %}
+<div style="margin-bottom:16px;">
+  <h1 class="page-title">Prompting log &mdash; {{ student.name }}</h1>
+  <div class="page-sub" style="display:flex;gap:10px;">
+    <span>{{ exchange_count }} exchange{% if exchange_count != 1 %}s{% endif %}</span>
+    <span>&middot;</span>
+    <span>{{ concept_count }} concept{% if concept_count != 1 %}s{% endif %} applied</span>
+  </div>
+</div>
+
+<div class="card">
+  <div class="chat-wrap" style="max-height:600px;">
+    {% if exchanges %}
+      {% for ex in exchanges %}
+      <div style="text-align:center;font-size:10px;color:var(--text-tertiary);padding:4px 0 2px;">
+        Exchange {{ ex.exchange_number }}
+      </div>
+      <div class="msg-you">
+        <div class="msg-meta" style="text-align:right;">
+          {{ student.name }}{% if ex.timestamp %} &middot; {{ ex.timestamp.strftime('%b %d, %H:%M') }}{% endif %}
+        </div>
+        <div class="bubble-you">{{ ex.student_message }}</div>
+        <div class="annotation" style="justify-content:flex-end;">
+          {% for concept in ex.concepts_applied %}<span class="atag atag-concept">{{ concept }}</span>{% endfor %}
+          {% if ex.has_pushback %}<span class="atag atag-pushback">pushback</span>{% endif %}
+        </div>
+      </div>
+      <div class="msg-ai">
+        <div class="msg-meta">Co-Intelligence</div>
+        <div class="bubble-ai">{{ ex.ai_response }}</div>
+      </div>
+      {% endfor %}
+    {% else %}
+    <div style="text-align:center;padding:40px 0;color:var(--text-tertiary);font-size:12px;">
+      No exchanges recorded yet.
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

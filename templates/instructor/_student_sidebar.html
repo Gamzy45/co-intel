@@ -1,0 +1,31 @@
+{# Shared instructor student-level sidebar. Include with: {% set _sid = student.id %} first. #}
+<nav class="sidebar">
+  <div class="sidebar-section">Overview</div>
+  <a href="{{ url_for('instructor.dashboard') }}"
+     class="sidebar-item{% if request.endpoint == 'instructor.dashboard' %} active{% endif %}">
+    <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+    Dashboard
+  </a>
+  <div class="sidebar-section">{{ student.name }}</div>
+  <a href="{{ url_for('instructor.log', student_id=student.id) }}"
+     class="sidebar-item{% if request.endpoint == 'instructor.log' %} active{% endif %}">
+    <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+    Prompting log
+  </a>
+  <a href="{{ url_for('instructor.assignment', student_id=student.id) }}"
+     class="sidebar-item{% if request.endpoint == 'instructor.assignment' %} active{% endif %}">
+    <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+    Final assignment
+  </a>
+  <a href="{{ url_for('instructor.reflection', student_id=student.id) }}"
+     class="sidebar-item{% if request.endpoint == 'instructor.reflection' %} active{% endif %}">
+    <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    Reflection
+  </a>
+  <a href="{{ url_for('instructor.assessment', student_id=student.id) }}"
+     class="sidebar-item{% if request.endpoint in ('instructor.assessment', 'instructor.assessment_generate') %} active{% endif %}">
+    <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+    Assessment
+  </a>
+  {% include "_course_nav.html" %}
+</nav>

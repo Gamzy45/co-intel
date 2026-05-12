@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Reflection — Co-Intelligence{% endblock %}
+
+{% block page_styles %}
+<style>
+  .q-card { margin-bottom:12px; }
+  .q-label { font-size:16px; font-weight:500; color:var(--text-primary); margin-bottom:6px; }
+  .q-hint  { font-size:14px; color:var(--text-tertiary); line-height:1.6; margin-bottom:10px; }
+  .success-banner {
+    display:none; background:var(--pill-green-bg); color:var(--pill-green-text);
+    border-radius:10px; padding:16px 18px; font-size:15px; line-height:1.6; margin-top:16px;
+  }
+  .success-banner.visible { display:block; }
+  .action-row { display:flex; gap:8px; justify-content:flex-end; margin-top:16px; }
+</style>
+{% endblock %}
+
+{% block sidebar %}
+<nav class="sidebar">
+  <div class="sidebar-section">Workflow</div>
+  <a href="{{ url_for('student.prompting') }}"
+     class="sidebar-item{% if request.endpoint == 'student.prompting' %} active{% endif %}">
+    <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+    Dialogic prompting
+  </a>
+  <a href="{{ url_for('student.assignment') }}"
+     class="sidebar-item{% if request.endpoint == 'student.assignment' %} active{% endif %}">
+    <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+    Assignment
+  </a>
+  <a href="{{ url_for('student.reflection') }}"
+     class="sidebar-item{% if request.endpoint == 'student.reflection' %} active{% endif %}">
+    <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    Reflection
+  </a>
+  {% include "_course_nav.html" %}
+</nav>
+{% endblock %}
+
+{% block content %}
+<div style="margin-bottom:16px;">
+  <h1 class="page-title">Reflection</h1>
+  <div class="page-sub">{{ course.name }} &middot; {{ assignment.title }}</div>
+</div>
+
+{% if existing %}
+<div style="background:var(--pill-green-bg);color:var(--pill-green-text);border-radius:10px;padding:10px 14px;font-size:12px;margin-bottom:14px;">
+  &#10003; Reflection submitted on {{ existing.submitted_at.strftime('%b %d at %H:%M') }}. You can update and resubmit below.
+</div>
+{% endif %}
+
+<div class="card q-card">
+  <div class="q-label">Q1 — {{ questions['question_1'] }}</div>
+  {% if questions['hint_1'] %}<div class="q-hint">{{ questions['hint_1'] }}</div>{% endif %}
+  <textarea id="q1" rows="5" placeholder="Write your response here…">{{ existing.question_1 if existing else '' }}</textarea>
+</div>
+
+<div class="card q-card">
+  <div class="q-label">Q2 — {{ questions['question_2'] }}</div>
+  {% if questions['hint_2'] %}<div class="q-hint">{{ questions['hint_2'] }}</div>{% endif %}
+  <textarea id="q2" rows="5" placeholder="Write your response here…">{{ existing.question_2 if existing else '' }}</textarea>
+</div>
+
+<div class="card q-card">
+  <div class="q-label">Q3 — {{ questions['question_3'] }}</div>
+  {% if questions['hint_3'] %}<div class="q-hint">{{ questions['hint_3'] }}</div>{% endif %}
+  <textarea id="q3" rows="5" placeholder="Write your response here…">{{ existing.question_3 if existing else '' }}</textarea>
+</div>
+
+<div class="action-row">
+  <button class="btn btn-primary" id="submit-btn"
+    onclick="submitReflectionForm('{{ url_for('student.reflection') }}')">
+    {% if existing %}Update reflection{% else %}Submit reflection{% endif %}
+  </button>
+</div>
+
+<div id="reflection-error" style="display:none;color:var(--text-orange);font-size:11px;margin-top:8px;text-align:right;"></div>
+
+<div class="success-banner" id="success-banner">
+  &#10003; Your reflection has been saved. The instructor can now review your full engagement — prompting log, output, and reflection together.
+</div>
+{% endblock %}
