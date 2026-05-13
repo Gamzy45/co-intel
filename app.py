@@ -58,9 +58,8 @@ def create_app():
     # ---- Security: HTTP headers via Talisman ----
     Talisman(
         app,
-        force_https=_IS_PRODUCTION,
-        content_security_policy=False,   # disabled — app uses inline styles/scripts
-        x_frame_options="DENY",
+        force_https=False,
+        content_security_policy=False,
     )
 
     from models.models import User
@@ -237,6 +236,7 @@ def create_app():
                 conn.execute(text(f"DELETE FROM outputs WHERE student_id IN ({id_list})"))
                 conn.execute(text(f"DELETE FROM session_summaries WHERE student_id IN ({id_list})"))
                 conn.execute(text(f"DELETE FROM assessment_scores WHERE student_id IN ({id_list})"))
+                conn.execute(text(f"DELETE FROM grades WHERE student_id IN ({id_list})"))
                 conn.commit()
         log_dev_reset(current_user.id)
         return jsonify({"success": True})
@@ -286,6 +286,7 @@ def create_app():
         db.create_all()
         _migrate()
         _seed()
+        _seed_demo_submissions()
 
     return app
 
@@ -304,7 +305,16 @@ def _migrate():
         ("assignments", "sidebar_mode",        "VARCHAR(50) NOT NULL DEFAULT 'prescriptive'"),
         ("assignments", "behavioral_emphasis", "VARCHAR(50) NOT NULL DEFAULT 'balanced'"),
         ("assignments", "supplementary_instructions", "TEXT NOT NULL DEFAULT ''"),
+        ("assignments", "max_score",           "FLOAT NOT NULL DEFAULT 100"),
         ("students",    "user_id",             "INTEGER REFERENCES users(id)"),
+        ("outputs",     "is_submitted",        "BOOLEAN NOT NULL DEFAULT 0"),
+        ("outputs",     "is_reopened",         "BOOLEAN NOT NULL DEFAULT 0"),
+        ("outputs",     "reopened_at",         "DATETIME"),
+        ("outputs",     "resubmitted_at",      "DATETIME"),
+        ("reflections", "is_submitted",        "BOOLEAN NOT NULL DEFAULT 0"),
+        ("reflections", "is_reopened",         "BOOLEAN NOT NULL DEFAULT 0"),
+        ("reflections", "reopened_at",         "DATETIME"),
+        ("reflections", "resubmitted_at",      "DATETIME"),
     ]
     with db.engine.connect() as conn:
         for table, col, col_def in new_cols:
@@ -476,6 +486,95 @@ def _seed_access_codes():
                     existing_codes.add(code)
                     break
             db.session.add(AccessCode(code=code, course_id=course.id))
+    db.session.commit()
+
+
+def _seed_demo_submissions():
+    """Ensure Alex M. (NMS demo student) has realistic submitted data on first launch."""
+    from models.models import Course, Student, Assignment, Output, Reflection, Grade
+
+    nms = Course.query.filter_by(name="New Media Society").first()
+    if not nms:
+        return
+    alex = Student.query.filter_by(name="Alex M.", course_id=nms.id).first()
+    assignment = Assignment.query.filter_by(course_id=nms.id).first()
+    if not alex or not assignment:
+        return
+
+    now = datetime.utcnow()
+
+    if not Output.query.filter_by(student_id=alex.id, assignment_id=assignment.id).first():
+        db.session.add(Output(
+            student_id=alex.id,
+            assignment_id=assignment.id,
+            modality=assignment.modality or "critical analysis",
+            content=(
+                "The coverage of the Senate climate bill in July 2024 offers a compelling case study "
+                "in agenda-setting and selective framing. Mainstream outlets foregrounded economic cost "
+                "projections while downplaying long-term environmental data — a pattern consistent with "
+                "what agenda-setting theory predicts when coverage follows industry-funded briefings.\n\n"
+                "What struck me most in my AI dialogue was how quickly the challenger pushed back on my "
+                "initial claim that 'all media is biased.' That pressure forced me to distinguish between "
+                "structural bias (built into editorial incentives) and intentional bias (deliberate "
+                "distortion). Framing theory helped me see that even neutral-seeming word choices — "
+                "'cost' vs 'investment' — carry ideological weight.\n\n"
+                "The confirmation bias angle was the most productive thread. Audiences who already "
+                "distrust government spending will read 'trillion-dollar bill' as confirmation of waste, "
+                "while environmentally-engaged readers see 'historic climate investment.' The same text, "
+                "two incompatible readings. This is not simply audience interpretation — it is the "
+                "predictable result of framing choices made before publication."
+            ),
+            submitted_at=now - timedelta(days=2),
+            is_submitted=True,
+        ))
+
+    if not Reflection.query.filter_by(student_id=alex.id, assignment_id=assignment.id).first():
+        db.session.add(Reflection(
+            student_id=alex.id,
+            assignment_id=assignment.id,
+            question_1=(
+                "The most surprising moment was when the AI challenged my claim that media bias is "
+                "intentional. I had not considered that structural incentives — advertising, audience "
+                "retention, editorial inertia — could produce biased framing without anyone intending it. "
+                "That distinction changed how I think about accountability in journalism."
+            ),
+            question_2=(
+                "I pushed back on the AI's steelman of the 'marketplace of ideas' argument. The AI "
+                "presented it well, but I felt it underweighted the structural advantages that well-funded "
+                "voices have in that marketplace. My pushback led to a more nuanced version of the argument "
+                "that I used directly in my analysis."
+            ),
+            question_3=(
+                "Next time I would front-load the framing theory angle earlier. I spent three exchanges "
+                "on general bias arguments before connecting to the specific course concepts. Starting with "
+                "the theoretical frame would have made the AI dialogue more productive from the start."
+            ),
+            submitted_at=now - timedelta(days=1),
+            is_submitted=True,
+        ))
+
+    if not Grade.query.filter_by(student_id=alex.id, assignment_id=assignment.id).first():
+        db.session.add(Grade(
+            student_id=alex.id,
+            assignment_id=assignment.id,
+            score=87,
+            max_score=assignment.max_score or 100,
+            feedback=(
+                "Strong analytical work overall. Your distinction between structural and intentional bias "
+                "was the clearest original contribution — that came through in the pushback exchange and "
+                "carried well into the final piece. The framing theory application is precise and grounded "
+                "in specific textual evidence rather than broad claims.\n\n"
+                "The confirmation bias section is your strongest paragraph. Consider developing the "
+                "agenda-setting angle further in revision — you named it but the analysis stays at a "
+                "surface level compared to the framing work. One more layer of evidence there would "
+                "bring the two theoretical threads into better balance."
+            ),
+            is_published=True,
+            published_at=now - timedelta(hours=6),
+            created_at=now - timedelta(hours=8),
+            updated_at=now - timedelta(hours=6),
+        ))
+
     db.session.commit()
 
 

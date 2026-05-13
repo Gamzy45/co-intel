@@ -58,6 +58,7 @@ class Assignment(db.Model):
     sidebar_mode = db.Column(db.String(50), nullable=False, default="prescriptive")
     behavioral_emphasis = db.Column(db.String(50), nullable=False, default="balanced")
     supplementary_instructions = db.Column(db.Text, nullable=False, default="")
+    max_score = db.Column(db.Float, nullable=False, default=100)
 
     course = db.relationship("Course", back_populates="assignments")
     exchanges = db.relationship("PromptExchange", back_populates="assignment")
@@ -136,6 +137,10 @@ class Reflection(db.Model):
     question_2 = db.Column(db.Text, nullable=False)
     question_3 = db.Column(db.Text, nullable=False)
     submitted_at = db.Column(db.DateTime, default=datetime.utcnow)
+    is_submitted = db.Column(db.Boolean, nullable=False, default=False)
+    is_reopened = db.Column(db.Boolean, nullable=False, default=False)
+    reopened_at = db.Column(db.DateTime, nullable=True)
+    resubmitted_at = db.Column(db.DateTime, nullable=True)
 
     student = db.relationship("Student", back_populates="reflections")
     assignment = db.relationship("Assignment", back_populates="reflections")
@@ -156,6 +161,10 @@ class Output(db.Model):
     analysis_json = db.Column(db.JSON, nullable=True)
     analysis_generated_at = db.Column(db.DateTime, nullable=True)
     submitted_at = db.Column(db.DateTime, default=datetime.utcnow)
+    is_submitted = db.Column(db.Boolean, nullable=False, default=False)
+    is_reopened = db.Column(db.Boolean, nullable=False, default=False)
+    reopened_at = db.Column(db.DateTime, nullable=True)
+    resubmitted_at = db.Column(db.DateTime, nullable=True)
 
     student = db.relationship("Student", back_populates="outputs")
     assignment = db.relationship("Assignment", back_populates="outputs")
@@ -247,3 +256,24 @@ class AssessmentScore(db.Model):
 
     def __repr__(self):
         return f"<AssessmentScore student={self.student_id} overall={self.overall_score}>"
+
+
+class Grade(db.Model):
+    __tablename__ = "grades"
+
+    id = db.Column(db.Integer, primary_key=True)
+    student_id = db.Column(db.Integer, db.ForeignKey("students.id"), nullable=False)
+    assignment_id = db.Column(db.Integer, db.ForeignKey("assignments.id"), nullable=False)
+    score = db.Column(db.Float, nullable=True)
+    max_score = db.Column(db.Float, nullable=False, default=100)
+    feedback = db.Column(db.Text, nullable=True)
+    is_published = db.Column(db.Boolean, nullable=False, default=False)
+    published_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    student = db.relationship("Student")
+    assignment = db.relationship("Assignment")
+
+    def __repr__(self):
+        return f"<Grade student={self.student_id} score={self.score}/{self.max_score}>"

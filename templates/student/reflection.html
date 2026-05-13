@@ -6,12 +6,16 @@
   .q-card { margin-bottom:12px; }
   .q-label { font-size:16px; font-weight:500; color:var(--text-primary); margin-bottom:6px; }
   .q-hint  { font-size:14px; color:var(--text-tertiary); line-height:1.6; margin-bottom:10px; }
-  .success-banner {
-    display:none; background:var(--pill-green-bg); color:var(--pill-green-text);
-    border-radius:10px; padding:16px 18px; font-size:15px; line-height:1.6; margin-top:16px;
+  .q-answer { font-size:15px; color:var(--text-primary); line-height:1.75; white-space:pre-wrap; }
+  .action-row { display:flex; gap:8px; justify-content:flex-end; margin-top:16px; align-items:center; }
+  .save-status { font-size:11px; color:var(--pill-green-text); margin-right:auto; display:none; }
+  .pill-submitted { background:#e8f5ee; color:#1a7a45; }
+  .pill-reopened  { background:#fef3e2; color:#92580a; }
+  .reopened-notice {
+    background:#fef3e2; border:1px solid #f5d9a0; border-radius:10px;
+    padding:12px 16px; margin-bottom:16px; font-size:13px; color:#92580a;
+    display:flex; align-items:flex-start; gap:8px; line-height:1.5;
   }
-  .success-banner.visible { display:block; }
-  .action-row { display:flex; gap:8px; justify-content:flex-end; margin-top:16px; }
 </style>
 {% endblock %}
 
@@ -38,17 +42,57 @@
 {% endblock %}
 
 {% block content %}
+{% set is_submitted = existing is not none and existing.is_submitted %}
+{% set is_reopened  = existing is not none and existing.is_submitted and existing.is_reopened %}
+
 <div style="margin-bottom:16px;">
   <h1 class="page-title">Reflection</h1>
   <div class="page-sub">{{ course.name }} &middot; {{ assignment.title }}</div>
 </div>
 
-{% if existing %}
-<div style="background:var(--pill-green-bg);color:var(--pill-green-text);border-radius:10px;padding:10px 14px;font-size:12px;margin-bottom:14px;">
-  &#10003; Reflection submitted on {{ existing.submitted_at.strftime('%b %d at %H:%M') }}. You can update and resubmit below.
+{% if is_reopened %}
+<div class="reopened-notice">
+  <i class="ti ti-refresh-alert" style="font-size:15px;flex-shrink:0;margin-top:1px;"></i>
+  <span>Your instructor has reopened this reflection for revision. You may edit and resubmit your answers.</span>
 </div>
 {% endif %}
 
+{% if is_submitted and not is_reopened %}
+<!-- ── Read-only submitted view ── -->
+<div style="margin-bottom:14px;">
+  <span class="pill pill-submitted">&#10003; Submitted {{ existing.submitted_at.strftime('%b %d at %H:%M') }}
+    {% if existing.resubmitted_at %}&middot; resubmitted {{ existing.resubmitted_at.strftime('%b %d') }}{% endif %}
+  </span>
+</div>
+
+<div class="card q-card">
+  <div class="q-label">Q1 — {{ questions['question_1'] }}</div>
+  <div class="q-answer">{{ existing.question_1 }}</div>
+</div>
+<div class="card q-card">
+  <div class="q-label">Q2 — {{ questions['question_2'] }}</div>
+  <div class="q-answer">{{ existing.question_2 }}</div>
+</div>
+<div class="card q-card">
+  <div class="q-label">Q3 — {{ questions['question_3'] }}</div>
+  <div class="q-answer">{{ existing.question_3 }}</div>
+</div>
+
+<!-- Feedback / grade section -->
+<div class="card" style="margin-top:4px;">
+  <div style="font-size:12px;font-weight:500;color:var(--text-secondary);margin-bottom:10px;">Instructor feedback</div>
+  {% if grade and grade.is_published %}
+    {% if grade.feedback %}
+    <div style="font-size:14px;color:var(--text-primary);line-height:1.7;white-space:pre-wrap;margin-bottom:10px;">{{ grade.feedback }}</div>
+    {% endif %}
+    <div style="font-size:11px;color:var(--text-tertiary);">Published {{ grade.published_at.strftime('%b %d at %H:%M') }}</div>
+  {% else %}
+    <div style="font-size:12px;color:var(--text-tertiary);">Your instructor will leave feedback here after reviewing your work.</div>
+  {% endif %}
+</div>
+
+{% else %}
+<!-- ── Editable view (not submitted or reopened) ── -->
 <div class="card q-card">
   <div class="q-label">Q1 — {{ questions['question_1'] }}</div>
   {% if questions['hint_1'] %}<div class="q-hint">{{ questions['hint_1'] }}</div>{% endif %}
@@ -68,15 +112,114 @@
 </div>
 
 <div class="action-row">
-  <button class="btn btn-primary" id="submit-btn"
-    onclick="submitReflectionForm('{{ url_for('student.reflection') }}')">
-    {% if existing %}Update reflection{% else %}Submit reflection{% endif %}
-  </button>
+  <span class="save-status" id="save-status"></span>
+  <button class="btn" onclick="saveDraft()">Save draft</button>
+  {% if is_reopened %}
+  <button class="btn btn-primary" onclick="resubmitReflection()">Resubmit reflection</button>
+  {% else %}
+  <button class="btn btn-primary" onclick="confirmSubmit()">Submit reflection</button>
+  {% endif %}
 </div>
-
 <div id="reflection-error" style="display:none;color:var(--text-orange);font-size:11px;margin-top:8px;text-align:right;"></div>
 
-<div class="success-banner" id="success-banner">
-  &#10003; Your reflection has been saved. The instructor can now review your full engagement — prompting log, output, and reflection together.
+{% if grade and grade.is_published %}
+<div class="card" style="margin-top:12px;">
+  <div style="font-size:12px;font-weight:500;color:var(--text-secondary);margin-bottom:10px;">Instructor feedback</div>
+  {% if grade.feedback %}
+  <div style="font-size:14px;color:var(--text-primary);line-height:1.7;white-space:pre-wrap;margin-bottom:10px;">{{ grade.feedback }}</div>
+  {% endif %}
+  <div style="font-size:11px;color:var(--text-tertiary);">Published {{ grade.published_at.strftime('%b %d at %H:%M') }}</div>
 </div>
+{% endif %}
+
+{% endif %}
+{% endblock %}
+
+{% block page_scripts %}
+<script>
+  function getAnswers() {
+    return {
+      question_1: document.getElementById('q1')?.value.trim() || '',
+      question_2: document.getElementById('q2')?.value.trim() || '',
+      question_3: document.getElementById('q3')?.value.trim() || '',
+    };
+  }
+
+  async function saveDraft() {
+    const errorEl  = document.getElementById('reflection-error');
+    const statusEl = document.getElementById('save-status');
+    errorEl.style.display = 'none';
+    const body = getAnswers();
+    if (!body.question_1 || !body.question_2 || !body.question_3) {
+      errorEl.textContent = 'All three questions must be answered.';
+      errorEl.style.display = 'block';
+      return;
+    }
+    try {
+      const resp = await fetch('{{ url_for("student.reflection") }}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || 'Save failed');
+      statusEl.style.display = 'inline';
+      statusEl.textContent = '✓ Saved';
+      setTimeout(() => { statusEl.style.display = 'none'; }, 3000);
+    } catch (err) {
+      errorEl.textContent = err.message;
+      errorEl.style.display = 'block';
+    }
+  }
+
+  async function confirmSubmit() {
+    if (!confirm('Once you submit your reflection your instructor will be notified. You cannot edit it after submission unless your instructor reopens it. Are you sure you want to submit?')) return;
+    const body = getAnswers();
+    const errorEl = document.getElementById('reflection-error');
+    errorEl.style.display = 'none';
+    if (!body.question_1 || !body.question_2 || !body.question_3) {
+      errorEl.textContent = 'All three questions must be answered before submitting.';
+      errorEl.style.display = 'block';
+      return;
+    }
+    try {
+      const resp = await fetch('{{ url_for("student.reflection_submit") }}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || 'Submission failed');
+      location.reload();
+    } catch (err) {
+      errorEl.textContent = err.message;
+      errorEl.style.display = 'block';
+    }
+  }
+
+  async function resubmitReflection() {
+    if (!confirm('Once you resubmit your instructor will be notified. Are you sure?')) return;
+    const body = getAnswers();
+    const errorEl = document.getElementById('reflection-error');
+    errorEl.style.display = 'none';
+    if (!body.question_1 || !body.question_2 || !body.question_3) {
+      errorEl.textContent = 'All three questions must be answered before resubmitting.';
+      errorEl.style.display = 'block';
+      return;
+    }
+    try {
+      const resp = await fetch('{{ url_for("student.reflection_resubmit") }}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || 'Resubmission failed');
+      location.reload();
+    } catch (err) {
+      errorEl.textContent = err.message;
+      errorEl.style.display = 'block';
+    }
+  }
+</script>
 {% endblock %}

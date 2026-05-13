@@ -6,7 +6,7 @@ from extensions import db
 import json
 
 from models.models import (
-    Assignment, AssessmentScore, Course, InstructorFeedback, Output,
+    Assignment, AssessmentScore, Course, Grade, InstructorFeedback, Output,
     PromptExchange, Reflection, ReflectionConfig, SessionSummary, Student,
 )
 from services.ai_service import score_engagement, analyze_assignment_authorship
@@ -83,6 +83,31 @@ def _student_row(student, assignment):
         student_id=student.id, assignment_id=assignment.id
     ).first() is not None
 
+    output = Output.query.filter_by(student_id=student.id, assignment_id=assignment.id).first()
+    reflection = Reflection.query.filter_by(student_id=student.id, assignment_id=assignment.id).first()
+    grade = Grade.query.filter_by(student_id=student.id, assignment_id=assignment.id).first()
+
+    if output and output.is_reopened:
+        output_status = "reopened"
+    elif output and output.is_submitted:
+        output_status = "submitted"
+    else:
+        output_status = "not_submitted"
+
+    if reflection and reflection.is_reopened:
+        reflection_status = "reopened"
+    elif reflection and reflection.is_submitted:
+        reflection_status = "submitted"
+    else:
+        reflection_status = "not_submitted"
+
+    if grade and grade.is_published:
+        grade_status = "published"
+    elif grade and grade.feedback:
+        grade_status = "draft"
+    else:
+        grade_status = "no_feedback"
+
     return {
         "student": student,
         "exchange_count": len(exchanges),
@@ -91,6 +116,9 @@ def _student_row(student, assignment):
         "depth_label": _depth_label(overall),
         "initials": "".join(p[0].upper() for p in student.name.split()[:2]),
         "has_feedback": has_feedback,
+        "output_status": output_status,
+        "reflection_status": reflection_status,
+        "grade_status": grade_status,
     }
 
 
@@ -154,6 +182,13 @@ def save_brief(assignment_id):
     modality = data.get("modality", "").strip()
     if modality:
         assignment.modality = modality
+    try:
+        max_score = float(data.get("max_score", 100))
+        if max_score <= 0:
+            max_score = 100
+    except (TypeError, ValueError):
+        max_score = 100
+    assignment.max_score = max_score
     db.session.commit()
     return jsonify({"success": True, "message": "Assignment brief saved"})
 
@@ -267,6 +302,8 @@ def assignment(student_id):
     else:
         generating_analysis = False
 
+    grade = Grade.query.filter_by(student_id=student_id, assignment_id=assignment.id).first()
+
     return render_template(
         "instructor/assignment.html",
         course=course,
@@ -278,6 +315,7 @@ def assignment(student_id):
         pushback_count=pushback_count,
         sections=sections,
         generating_analysis=generating_analysis,
+        grade=grade,
     )
 
 
@@ -348,6 +386,8 @@ def reflection(student_id):
     ).first()
     questions = _get_reflection_config(assignment.id)
 
+    grade = Grade.query.filter_by(student_id=student_id, assignment_id=assignment.id).first()
+
     return render_template(
         "instructor/reflection.html",
         course=course,
@@ -355,6 +395,7 @@ def reflection(student_id):
         student=student,
         reflection=reflection,
         questions=questions,
+        grade=grade,
     )
 
 
@@ -558,6 +599,104 @@ def reflection_config():
             hint_3=data.get("hint_3", "").strip() or None,
             updated_at=datetime.utcnow(),
         ))
+    db.session.commit()
+    return jsonify({"success": True})
+
+
+# ---------------------------------------------------------------------------
+# Grading endpoints
+# ---------------------------------------------------------------------------
+
+@instructor_bp.route("/student/<int:student_id>/grade/save", methods=["POST"])
+def grade_save(student_id):
+    student = Student.query.get_or_404(student_id)
+    _, assignment = _get_base_for_student(student)
+    data = request.get_json(silent=True) or {}
+
+    try:
+        score = float(data["score"]) if data.get("score") not in (None, "", "null") else None
+    except (TypeError, ValueError):
+        score = None
+    feedback = data.get("feedback", "").strip() or None
+
+    grade = Grade.query.filter_by(student_id=student_id, assignment_id=assignment.id).first()
+    now = datetime.utcnow()
+    if grade:
+        grade.score = score
+        grade.feedback = feedback
+        grade.max_score = assignment.max_score or 100
+        grade.updated_at = now
+    else:
+        grade = Grade(
+            student_id=student_id,
+            assignment_id=assignment.id,
+            score=score,
+            max_score=assignment.max_score or 100,
+            feedback=feedback,
+            updated_at=now,
+        )
+        db.session.add(grade)
+    db.session.commit()
+    return jsonify({"success": True, "saved_at": now.strftime("%b %d at %H:%M")})
+
+
+@instructor_bp.route("/student/<int:student_id>/grade/publish", methods=["POST"])
+def grade_publish(student_id):
+    student = Student.query.get_or_404(student_id)
+    _, assignment = _get_base_for_student(student)
+
+    grade = Grade.query.filter_by(student_id=student_id, assignment_id=assignment.id).first()
+    if not grade:
+        return jsonify({"error": "No grade record found. Save a draft first."}), 404
+
+    now = datetime.utcnow()
+    grade.is_published = True
+    grade.published_at = now
+    grade.updated_at = now
+    db.session.commit()
+    return jsonify({"success": True, "published_at": now.strftime("%b %d at %H:%M")})
+
+
+@instructor_bp.route("/student/<int:student_id>/grade/unpublish", methods=["POST"])
+def grade_unpublish(student_id):
+    student = Student.query.get_or_404(student_id)
+    _, assignment = _get_base_for_student(student)
+
+    grade = Grade.query.filter_by(student_id=student_id, assignment_id=assignment.id).first()
+    if grade:
+        grade.is_published = False
+        grade.published_at = None
+        grade.updated_at = datetime.utcnow()
+        db.session.commit()
+    return jsonify({"success": True})
+
+
+@instructor_bp.route("/student/<int:student_id>/assignment/reopen", methods=["POST"])
+def assignment_reopen(student_id):
+    student = Student.query.get_or_404(student_id)
+    _, assignment = _get_base_for_student(student)
+
+    output = Output.query.filter_by(student_id=student_id, assignment_id=assignment.id).first()
+    if not output or not output.is_submitted:
+        return jsonify({"error": "No submitted assignment found."}), 404
+
+    output.is_reopened = True
+    output.reopened_at = datetime.utcnow()
+    db.session.commit()
+    return jsonify({"success": True})
+
+
+@instructor_bp.route("/student/<int:student_id>/reflection/reopen", methods=["POST"])
+def reflection_reopen(student_id):
+    student = Student.query.get_or_404(student_id)
+    _, assignment = _get_base_for_student(student)
+
+    reflection = Reflection.query.filter_by(student_id=student_id, assignment_id=assignment.id).first()
+    if not reflection or not reflection.is_submitted:
+        return jsonify({"error": "No submitted reflection found."}), 404
+
+    reflection.is_reopened = True
+    reflection.reopened_at = datetime.utcnow()
     db.session.commit()
     return jsonify({"success": True})
 

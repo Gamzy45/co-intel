@@ -16,6 +16,15 @@
   .pill-depth-surface  { background:var(--bg-surface);    color:var(--text-secondary);  }
   .pill-depth-pending  { background:var(--bg-surface);    color:var(--text-tertiary);   }
 
+  .status-cluster { display:flex; flex-direction:column; gap:3px; flex-shrink:0; min-width:100px; }
+  .status-pill {
+    font-size:10px; font-weight:500; border-radius:4px; padding:1px 6px;
+    display:inline-block; width:fit-content;
+  }
+  .status-pill-gray   { background:#f0f0f0; color:#888; }
+  .status-pill-green  { background:#e8f5ee; color:#1a7a45; }
+  .status-pill-amber  { background:#fef3e2; color:#92580a; }
+
   .cfg-field { margin-bottom:10px; }
   .cfg-label { font-size:11px; color:var(--text-tertiary); display:block; margin-bottom:4px; }
   .cfg-textarea, .cfg-input {
@@ -277,9 +286,17 @@
   <div class="student-row">
     <div class="avatar">{{ row.initials }}</div>
     <div class="student-name">{{ row.student.name }}</div>
-    {% if row.has_feedback %}
-    <span title="Instructor feedback given" style="font-size:14px;color:var(--text-orange);flex-shrink:0;" class="ti ti-message-circle"></span>
-    {% endif %}
+    <div class="status-cluster">
+      <span class="status-pill {% if row.output_status == 'submitted' %}status-pill-green{% elif row.output_status == 'reopened' %}status-pill-amber{% else %}status-pill-gray{% endif %}">
+        Assgn: {% if row.output_status == 'submitted' %}submitted{% elif row.output_status == 'reopened' %}reopened{% else %}not submitted{% endif %}
+      </span>
+      <span class="status-pill {% if row.reflection_status == 'submitted' %}status-pill-green{% elif row.reflection_status == 'reopened' %}status-pill-amber{% else %}status-pill-gray{% endif %}">
+        Refl: {% if row.reflection_status == 'submitted' %}submitted{% elif row.reflection_status == 'reopened' %}reopened{% else %}not submitted{% endif %}
+      </span>
+      <span class="status-pill {% if row.grade_status == 'published' %}status-pill-green{% elif row.grade_status == 'draft' %}status-pill-amber{% else %}status-pill-gray{% endif %}">
+        Feedback: {{ row.grade_status | replace('_', ' ') }}
+      </span>
+    </div>
     <div class="score-bar-wrap">
       <div class="score-bar-fill" style="width:{{ row.overall_score or 0 }}%;"></div>
     </div>

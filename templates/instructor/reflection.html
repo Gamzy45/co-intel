@@ -9,12 +9,54 @@
 </style>
 {% endblock %}
 
+{% block page_scripts %}
+<script>
+  async function reopenReflection() {
+    if (!confirm('This will allow the student to edit and resubmit their reflection. The current submission will be preserved until they resubmit. Are you sure?')) return;
+    try {
+      const resp = await fetch('{{ url_for("instructor.reflection_reopen", student_id=student.id) }}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || 'Failed to reopen');
+      location.reload();
+    } catch (err) {
+      alert('Error: ' + err.message);
+    }
+  }
+</script>
+{% endblock %}
+
 {% block sidebar %}{% include "instructor/_student_sidebar.html" %}{% endblock %}
 
 {% block content %}
 <div style="margin-bottom:16px;">
   <h1 class="page-title">Metacognitive reflection &mdash; {{ student.name }}</h1>
   <div class="page-sub">{{ course.name }} &middot; {{ assignment.title }}</div>
+</div>
+
+<!-- Submission status + reopen -->
+<div class="card" style="margin-bottom:12px;">
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+    <div style="display:flex;align-items:center;gap:8px;">
+      <span style="font-size:12px;font-weight:500;color:var(--text-secondary);">Submission</span>
+      {% if reflection %}
+        {% if reflection.is_reopened %}
+          <span class="pill" style="background:#fef3e2;color:#92580a;">Reopened</span>
+        {% elif reflection.is_submitted %}
+          <span class="pill" style="background:#e8f5ee;color:#1a7a45;">&#10003; Submitted {{ reflection.submitted_at.strftime('%b %d at %H:%M') }}</span>
+        {% else %}
+          <span class="pill" style="background:var(--bg-surface);color:var(--text-secondary);">Not submitted</span>
+        {% endif %}
+      {% else %}
+        <span class="pill" style="background:var(--bg-surface);color:var(--text-secondary);">Not submitted</span>
+      {% endif %}
+    </div>
+    {% if reflection and reflection.is_submitted and not reflection.is_reopened %}
+    <button class="btn" style="font-size:11px;" onclick="reopenReflection()">Reopen submission</button>
+    {% endif %}
+  </div>
 </div>
 
 {% if reflection %}

@@ -37,6 +37,17 @@
   @keyframes spin { to { transform:rotate(360deg); } }
   .loading-label { font-size:13px; color:var(--text-secondary); margin-bottom:3px; }
   .loading-sub   { font-size:11px; color:var(--text-tertiary); }
+
+  /* Grading */
+  .cfg-field { margin-bottom:10px; }
+  .cfg-label { font-size:11px; color:var(--text-tertiary); display:block; margin-bottom:4px; }
+  .cfg-textarea, .cfg-input {
+    width:100%; font-size:12px; padding:6px 8px;
+    border:1px solid var(--border); border-radius:6px;
+    background:var(--bg-primary); color:var(--text-primary);
+    font-family:inherit; line-height:1.5;
+  }
+  .cfg-textarea { resize:vertical; }
 </style>
 {% endblock %}
 
@@ -68,6 +79,29 @@
     <div class="metric-label">Pushback moments</div>
     <div class="metric-val">{{ pushback_count }}</div>
     <div class="metric-sub">critical challenges</div>
+  </div>
+</div>
+
+<!-- Submission status + reopen -->
+<div class="card" style="margin-bottom:12px;">
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+    <div style="display:flex;align-items:center;gap:8px;">
+      <span style="font-size:12px;font-weight:500;color:var(--text-secondary);">Submission</span>
+      {% if output %}
+        {% if output.is_reopened %}
+          <span class="pill" style="background:#fef3e2;color:#92580a;">Reopened</span>
+        {% elif output.is_submitted %}
+          <span class="pill" style="background:#e8f5ee;color:#1a7a45;">&#10003; Submitted {{ output.submitted_at.strftime('%b %d at %H:%M') }}</span>
+        {% else %}
+          <span class="pill" style="background:var(--bg-surface);color:var(--text-secondary);">Not submitted</span>
+        {% endif %}
+      {% else %}
+        <span class="pill" style="background:var(--bg-surface);color:var(--text-secondary);">Not submitted</span>
+      {% endif %}
+    </div>
+    {% if output and output.is_submitted and not output.is_reopened %}
+    <button class="btn" style="font-size:11px;" onclick="reopenAssignment()">Reopen submission</button>
+    {% endif %}
   </div>
 </div>
 
@@ -136,6 +170,37 @@
 </div>
 
 {% endif %}
+
+<!-- Instructor feedback section -->
+<div class="card" style="margin-top:12px;">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap;">
+    <span style="font-size:12px;font-weight:500;color:var(--text-secondary);">Instructor feedback</span>
+    {% if grade and grade.is_published %}
+    <span class="pill" style="background:#e8f5ee;color:#1a7a45;font-size:10px;">Published {{ grade.published_at.strftime('%b %d at %H:%M') }}</span>
+    {% endif %}
+  </div>
+
+  <div class="cfg-field">
+    <label class="cfg-label">Feedback for student</label>
+    <textarea id="grade-feedback" class="cfg-textarea" rows="5"
+              placeholder="Write your feedback for this student here. Your comments will be visible to the student after you publish them.">{{ grade.feedback if grade and grade.feedback else '' }}</textarea>
+  </div>
+
+  <div style="font-size:11px;color:var(--text-tertiary);margin-bottom:12px;">
+    Official grades are recorded in your course gradebook. Use this space for qualitative feedback on the student's thinking process and engagement.
+  </div>
+
+  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+    <button class="btn" onclick="saveGradeDraft()">Save draft</button>
+    <button class="btn btn-primary" onclick="publishGrade()">Publish feedback</button>
+    {% if grade and grade.is_published %}
+    <button class="btn" style="font-size:11px;" onclick="unpublishGrade()">Unpublish</button>
+    {% endif %}
+    <span id="grade-status" style="display:none;font-size:11px;color:var(--pill-green-text);"></span>
+    <span id="grade-error" style="display:none;font-size:11px;color:var(--text-orange);"></span>
+    <span id="grade-saved-at" style="font-size:11px;color:var(--text-tertiary);">{% if grade and grade.updated_at %}Last saved {{ grade.updated_at.strftime('%b %d at %H:%M') }}{% endif %}</span>
+  </div>
+</div>
 {% endblock %}
 
 {% block page_scripts %}
@@ -236,4 +301,85 @@
   document.getElementById('annotated-display').innerHTML = renderAnnotated(fullText, segments);
 </script>
 {% endif %}
+
+<script>
+  async function saveGradeDraft() {
+    const statusEl  = document.getElementById('grade-status');
+    const errorEl   = document.getElementById('grade-error');
+    const savedAtEl = document.getElementById('grade-saved-at');
+    statusEl.style.display = 'none';
+    errorEl.style.display  = 'none';
+    const feedback = document.getElementById('grade-feedback').value;
+    try {
+      const resp = await fetch('{{ url_for("instructor.grade_save", student_id=student.id) }}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ feedback }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || 'Save failed');
+      statusEl.textContent = '✓ Draft saved';
+      statusEl.style.display = 'inline';
+      savedAtEl.textContent = `Last saved ${data.saved_at}`;
+      setTimeout(() => { statusEl.style.display = 'none'; }, 3000);
+    } catch (err) {
+      errorEl.textContent = err.message;
+      errorEl.style.display = 'inline';
+    }
+  }
+
+  async function publishGrade() {
+    const errorEl = document.getElementById('grade-error');
+    errorEl.style.display = 'none';
+    await saveGradeDraft();
+    if (errorEl.style.display !== 'none') return;
+    try {
+      const resp = await fetch('{{ url_for("instructor.grade_publish", student_id=student.id) }}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || 'Publish failed');
+      const statusEl = document.getElementById('grade-status');
+      statusEl.textContent = 'Feedback published and visible to student';
+      statusEl.style.display = 'inline';
+      setTimeout(() => { location.reload(); }, 3000);
+    } catch (err) {
+      errorEl.textContent = err.message;
+      errorEl.style.display = 'inline';
+    }
+  }
+
+  async function unpublishGrade() {
+    const errorEl = document.getElementById('grade-error');
+    errorEl.style.display = 'none';
+    try {
+      const resp = await fetch('{{ url_for("instructor.grade_unpublish", student_id=student.id) }}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || 'Unpublish failed');
+      location.reload();
+    } catch (err) {
+      errorEl.textContent = err.message;
+      errorEl.style.display = 'inline';
+    }
+  }
+
+  async function reopenAssignment() {
+    if (!confirm('This will allow the student to edit and resubmit their work. The current submission will be preserved until they resubmit. Are you sure?')) return;
+    try {
+      const resp = await fetch('{{ url_for("instructor.assignment_reopen", student_id=student.id) }}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || 'Failed to reopen');
+      location.reload();
+    } catch (err) {
+      alert('Error: ' + err.message);
+    }
+  }
+</script>
 {% endblock %}

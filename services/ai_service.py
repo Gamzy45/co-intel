@@ -17,6 +17,18 @@ def _client() -> anthropic.Anthropic:
     return anthropic.Anthropic(api_key=api_key)
 
 
+def _truncate_to_sentence(text: str, max_words: int) -> str:
+    """Cut text at the last sentence boundary that keeps word count under max_words."""
+    words = text.split()
+    if len(words) <= max_words:
+        return text
+    cutoff = " ".join(words[:max_words])
+    last_boundary = max(cutoff.rfind("."), cutoff.rfind("?"), cutoff.rfind("!"))
+    if last_boundary == -1:
+        return cutoff
+    return text[: last_boundary + 1]
+
+
 def get_ai_response(
     student_message: str,
     conversation_history: list[dict],
@@ -35,11 +47,39 @@ def get_ai_response(
 
     response = _client().messages.create(
         model=MODEL,
-        max_tokens=MAX_TOKENS,
+        max_tokens=200,
         system=system_prompt,
         messages=messages,
     )
-    return response.content[0].text
+    text = response.content[0].text
+    word_count = len(text.split())
+    print(f"AI RESPONSE WORD COUNT: {word_count}", flush=True)
+
+    if word_count > 100:
+        shorten_response = _client().messages.create(
+            model=MODEL,
+            max_tokens=200,
+            messages=[
+                {
+                    "role": "user",
+                    "content": (
+                        "Your previous response was too long. Rewrite it in 100 words or fewer. "
+                        "Keep the most important point and the question at the end if there was one. "
+                        "Do not add new content.\n\n"
+                        f"Original response:\n{text}"
+                    ),
+                }
+            ],
+        )
+        text = shorten_response.content[0].text
+        word_count = len(text.split())
+        print(f"AI RESPONSE WORD COUNT (after shortening): {word_count}", flush=True)
+
+        if word_count > 120:
+            text = _truncate_to_sentence(text, 120)
+            print(f"AI RESPONSE WORD COUNT (after truncation): {len(text.split())}", flush=True)
+
+    return text
 
 
 def detect_concept_usage(student_message: str, required_concepts: list[str]) -> dict:

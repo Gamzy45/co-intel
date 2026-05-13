@@ -4,7 +4,7 @@ from datetime import datetime
 from flask import Blueprint, jsonify, redirect, render_template, request, session, url_for
 from flask_login import current_user
 from extensions import db
-from models.models import Assignment, Course, InstructorFeedback, Output, PromptExchange, Reflection, ReflectionConfig, SessionSummary, Student
+from models.models import Assignment, Course, Grade, InstructorFeedback, Output, PromptExchange, Reflection, ReflectionConfig, SessionSummary, Student
 from services.ai_service import detect_concept_usage, get_ai_response, suggest_discussion_points
 from services.archetype_service import ARCHETYPES, build_system_prompt, generate_session_summary
 from config import MODALITY_SECTIONS, DEFAULT_REFLECTION_QUESTIONS
@@ -213,13 +213,15 @@ def assignment():
         if not content:
             return jsonify({"error": "Please write something before saving."}), 400
 
+        if existing_output and existing_output.is_submitted and not existing_output.is_reopened:
+            return jsonify({"error": "Cannot edit a submitted assignment."}), 403
+
         modality = assignment.modality or ""
 
         if existing_output:
             existing_output.modality = modality
             existing_output.content = content
             existing_output.content_sections = None
-            existing_output.submitted_at = datetime.utcnow()
             existing_output.analysis_json = None
             existing_output.analysis_generated_at = None
         else:
@@ -228,12 +230,15 @@ def assignment():
                 assignment_id=assignment.id,
                 modality=modality,
                 content=content,
-                submitted_at=datetime.utcnow(),
             )
             db.session.add(existing_output)
 
         db.session.commit()
         return jsonify({"success": True})
+
+    grade = Grade.query.filter_by(
+        student_id=student.id, assignment_id=assignment.id
+    ).first()
 
     return render_template(
         "student/assignment.html",
@@ -244,6 +249,7 @@ def assignment():
         exchange_count=exchange_count,
         min_exchanges=course.min_exchanges,
         unlocked=exchange_count >= course.min_exchanges,
+        grade=grade,
     )
 
 
@@ -319,11 +325,13 @@ def reflection():
         if not q1 or not q2 or not q3:
             return jsonify({"error": "All three questions must be answered."}), 400
 
+        if existing and existing.is_submitted and not existing.is_reopened:
+            return jsonify({"error": "Cannot edit a submitted reflection."}), 403
+
         if existing:
             existing.question_1 = q1
             existing.question_2 = q2
             existing.question_3 = q3
-            existing.submitted_at = datetime.utcnow()
         else:
             existing = Reflection(
                 student_id=student.id,
@@ -331,7 +339,6 @@ def reflection():
                 question_1=q1,
                 question_2=q2,
                 question_3=q3,
-                submitted_at=datetime.utcnow(),
             )
             db.session.add(existing)
 
@@ -351,6 +358,10 @@ def reflection():
     else:
         questions = {k: (v or "") for k, v in DEFAULT_REFLECTION_QUESTIONS.items()}
 
+    grade = Grade.query.filter_by(
+        student_id=student.id, assignment_id=assignment.id
+    ).first()
+
     return render_template(
         "student/reflection.html",
         student=student,
@@ -358,4 +369,137 @@ def reflection():
         course=course,
         existing=existing,
         questions=questions,
+        grade=grade,
     )
+
+
+@student_bp.route("/assignment/submit", methods=["POST"])
+def assignment_submit():
+    student, assignment, course = _get_context()
+    data = request.get_json(silent=True) or {}
+    content = data.get("content", "").strip()
+
+    output = Output.query.filter_by(
+        student_id=student.id, assignment_id=assignment.id
+    ).first()
+
+    if not content and (not output or not output.content):
+        return jsonify({"error": "Please write something before submitting."}), 400
+
+    now = datetime.utcnow()
+    if output:
+        if content:
+            output.content = content
+            output.analysis_json = None
+            output.analysis_generated_at = None
+        output.is_submitted = True
+        output.submitted_at = now
+        output.is_reopened = False
+    else:
+        output = Output(
+            student_id=student.id,
+            assignment_id=assignment.id,
+            modality=assignment.modality or "",
+            content=content,
+            submitted_at=now,
+            is_submitted=True,
+        )
+        db.session.add(output)
+
+    db.session.commit()
+    return jsonify({"success": True, "submitted_at": now.strftime("%b %d at %H:%M")})
+
+
+@student_bp.route("/assignment/resubmit", methods=["POST"])
+def assignment_resubmit():
+    student, assignment, course = _get_context()
+    data = request.get_json(silent=True) or {}
+    content = data.get("content", "").strip()
+
+    output = Output.query.filter_by(
+        student_id=student.id, assignment_id=assignment.id
+    ).first()
+
+    if not output:
+        return jsonify({"error": "No assignment found."}), 404
+
+    now = datetime.utcnow()
+    if content:
+        output.content = content
+        output.analysis_json = None
+        output.analysis_generated_at = None
+    output.is_submitted = True
+    output.is_reopened = False
+    output.resubmitted_at = now
+    output.submitted_at = now
+    db.session.commit()
+    return jsonify({"success": True, "submitted_at": now.strftime("%b %d at %H:%M")})
+
+
+@student_bp.route("/reflection/submit", methods=["POST"])
+def reflection_submit():
+    student, assignment, course = _get_context()
+    data = request.get_json(silent=True) or {}
+    q1 = data.get("question_1", "").strip()
+    q2 = data.get("question_2", "").strip()
+    q3 = data.get("question_3", "").strip()
+
+    if not q1 or not q2 or not q3:
+        return jsonify({"error": "All three questions must be answered before submitting."}), 400
+
+    existing = Reflection.query.filter_by(
+        student_id=student.id, assignment_id=assignment.id
+    ).first()
+
+    now = datetime.utcnow()
+    if existing:
+        existing.question_1 = q1
+        existing.question_2 = q2
+        existing.question_3 = q3
+        existing.is_submitted = True
+        existing.submitted_at = now
+        existing.is_reopened = False
+    else:
+        existing = Reflection(
+            student_id=student.id,
+            assignment_id=assignment.id,
+            question_1=q1,
+            question_2=q2,
+            question_3=q3,
+            submitted_at=now,
+            is_submitted=True,
+        )
+        db.session.add(existing)
+
+    db.session.commit()
+    return jsonify({"success": True, "submitted_at": now.strftime("%b %d at %H:%M")})
+
+
+@student_bp.route("/reflection/resubmit", methods=["POST"])
+def reflection_resubmit():
+    student, assignment, course = _get_context()
+    data = request.get_json(silent=True) or {}
+    q1 = data.get("question_1", "").strip()
+    q2 = data.get("question_2", "").strip()
+    q3 = data.get("question_3", "").strip()
+
+    existing = Reflection.query.filter_by(
+        student_id=student.id, assignment_id=assignment.id
+    ).first()
+
+    if not existing:
+        return jsonify({"error": "No reflection found."}), 404
+
+    now = datetime.utcnow()
+    if q1:
+        existing.question_1 = q1
+    if q2:
+        existing.question_2 = q2
+    if q3:
+        existing.question_3 = q3
+    existing.is_submitted = True
+    existing.is_reopened = False
+    existing.resubmitted_at = now
+    existing.submitted_at = now
+    db.session.commit()
+    return jsonify({"success": True, "submitted_at": now.strftime("%b %d at %H:%M")})
