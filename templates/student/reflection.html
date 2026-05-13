@@ -158,7 +158,7 @@
     try {
       const resp = await fetch('{{ url_for("student.reflection") }}', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
         body: JSON.stringify(body),
       });
       const data = await resp.json();
@@ -185,7 +185,7 @@
     try {
       const resp = await fetch('{{ url_for("student.reflection_submit") }}', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
         body: JSON.stringify(body),
       });
       const data = await resp.json();
@@ -210,7 +210,7 @@
     try {
       const resp = await fetch('{{ url_for("student.reflection_resubmit") }}', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
         body: JSON.stringify(body),
       });
       const data = await resp.json();

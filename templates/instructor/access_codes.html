@@ -125,7 +125,7 @@
     try {
       const resp = await fetch(GENERATE_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
         body: JSON.stringify({ count }),
       });
       const data = await resp.json();

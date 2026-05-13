@@ -210,7 +210,7 @@
     try {
       const resp = await fetch(
         '{{ url_for("instructor.assignment_analyze", student_id=student.id) }}',
-        { method: 'POST' }
+        { method: 'POST', headers: { 'X-CSRFToken': getCsrfToken() } }
       );
       const data = await resp.json();
       if (data.success) {
@@ -313,7 +313,7 @@
     try {
       const resp = await fetch('{{ url_for("instructor.grade_save", student_id=student.id) }}', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
         body: JSON.stringify({ feedback }),
       });
       const data = await resp.json();
@@ -336,7 +336,7 @@
     try {
       const resp = await fetch('{{ url_for("instructor.grade_publish", student_id=student.id) }}', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
       });
       const data = await resp.json();
       if (!resp.ok) throw new Error(data.error || 'Publish failed');
@@ -356,7 +356,7 @@
     try {
       const resp = await fetch('{{ url_for("instructor.grade_unpublish", student_id=student.id) }}', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
       });
       const data = await resp.json();
       if (!resp.ok) throw new Error(data.error || 'Unpublish failed');
@@ -372,7 +372,7 @@
     try {
       const resp = await fetch('{{ url_for("instructor.assignment_reopen", student_id=student.id) }}', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
       });
       const data = await resp.json();
       if (!resp.ok) throw new Error(data.error || 'Failed to reopen');

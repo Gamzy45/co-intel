@@ -16,7 +16,7 @@
     try {
       const resp = await fetch('{{ url_for("instructor.reflection_reopen", student_id=student.id) }}', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
       });
       const data = await resp.json();
       if (!resp.ok) throw new Error(data.error || 'Failed to reopen');

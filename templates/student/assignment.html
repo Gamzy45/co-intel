@@ -237,7 +237,7 @@
     try {
       const resp = await fetch('{{ url_for("student.assignment") }}', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
         body: JSON.stringify({ content }),
       });
       const data = await resp.json();
@@ -264,7 +264,7 @@
     try {
       const resp = await fetch('{{ url_for("student.assignment_submit") }}', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
         body: JSON.stringify({ content }),
       });
       const data = await resp.json();
@@ -289,7 +289,7 @@
     try {
       const resp = await fetch('{{ url_for("student.assignment_resubmit") }}', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
         body: JSON.stringify({ content }),
       });
       const data = await resp.json();

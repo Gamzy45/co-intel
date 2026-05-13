@@ -3,6 +3,7 @@
 
 {% block page_styles %}
 <style>
+  /* ── Workflow phase track ───────────────────────────── */
   .phase-track { display:flex; align-items:center; gap:0; }
   .phase-step  {
     display:flex; align-items:center; gap:6px; font-size:11px;
@@ -29,6 +30,7 @@
 
   .progress-row { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px; }
 
+  /* ── Chat / input ──────────────────────────────────── */
   .chat-input-row { display:flex; gap:8px; margin-top:12px; }
   .chat-input-row textarea { flex:1; min-height:60px; max-height:120px; }
   .chat-input-row .btn { align-self:flex-end; }
@@ -68,7 +70,7 @@
     40%         { transform:translateY(-5px); }
   }
 
-  /* Pre-conversation card */
+  /* ── Pre-conversation card ─────────────────────────── */
   .criteria-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; margin-top:10px; }
   @media (max-width:700px) { .criteria-grid { grid-template-columns:1fr; } }
   .criteria-card {
@@ -99,15 +101,89 @@
     color:var(--text-primary); font-weight:500;
   }
 
-  .archetype-pill {
-    display:inline-flex; align-items:center; gap:6px;
-    background:var(--bg-surface); border:1px solid var(--border);
-    border-radius:20px; padding:4px 10px; font-size:11px;
-    color:var(--text-secondary); cursor:pointer; margin-bottom:12px;
+  /* ── Scaffold bar ───────────────────────────────────── */
+  .scaffold-bar {
+    border:1px solid var(--border); border-radius:10px;
+    background:var(--bg-primary); margin-bottom:12px; overflow:hidden;
   }
-  .archetype-pill:hover { background:var(--bg-primary); }
+  /* Brief row */
+  .scaffold-brief-row {
+    display:flex; align-items:center; gap:8px;
+    padding:7px 12px; cursor:pointer; user-select:none;
+    transition:background .12s;
+  }
+  .scaffold-brief-row:hover { background:var(--bg-surface); }
+  .brief-bar-title {
+    font-size:12px; font-weight:500; color:var(--text-primary);
+    flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  .brief-modality-pill {
+    font-size:10px; color:var(--text-secondary); background:var(--bg-surface);
+    border:1px solid var(--border); border-radius:20px;
+    padding:1px 8px; flex-shrink:0; white-space:nowrap;
+  }
+  .brief-chevron { color:var(--text-tertiary); flex-shrink:0; transition:transform .25s ease; }
+  .brief-chevron.open { transform:rotate(180deg); }
+  .brief-body { max-height:0; overflow:hidden; transition:max-height .3s cubic-bezier(.4,0,.2,1); }
+  .brief-body.open { max-height:800px; }
+  .brief-body-inner {
+    padding:10px 12px 12px; border-top:1px solid var(--border);
+    font-size:13px; color:var(--text-primary); line-height:1.65;
+  }
+  /* Phase strip */
+  .scaffold-phase {
+    display:flex; align-items:center; gap:10px;
+    padding:5px 12px; border-top:1px solid var(--border);
+    font-size:12px; min-height:0;
+  }
+  .strip-sep { width:1px; height:12px; background:var(--border); flex-shrink:0; }
+  .strip-exchange { color:var(--text-secondary); flex-shrink:0; white-space:nowrap; font-size:12px; }
+  .strip-desc { color:var(--text-tertiary); min-width:0; flex:1; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  /* Criteria panel */
+  .scaffold-criteria {
+    display:flex; align-items:center; gap:8px; flex-wrap:nowrap;
+    padding:5px 12px; border-top:1px solid var(--border); overflow-x:auto;
+  }
+  .criteria-panel-label {
+    font-size:10px; color:var(--text-tertiary); flex-shrink:0; white-space:nowrap;
+  }
+  .criteria-cpill {
+    font-size:11px; padding:2px 8px; border-radius:20px;
+    border:1px solid var(--border); background:var(--bg-surface);
+    color:var(--text-secondary); cursor:pointer; font-family:inherit;
+    transition:background .12s, color .12s, border-color .12s; white-space:nowrap;
+    flex-shrink:0;
+  }
+  .criteria-cpill:hover, .criteria-cpill.active {
+    background:var(--bg-orange-light); color:var(--text-orange); border-color:var(--accent);
+  }
+  /* Criterion detail dropdown */
+  .criterion-detail {
+    border-top:1px solid var(--border);
+    padding:10px 12px 12px; background:var(--bg-surface);
+  }
+  .criterion-detail-name {
+    font-size:12px; font-weight:500; color:var(--text-primary); margin-bottom:3px;
+  }
+  .criterion-detail-desc {
+    font-size:12px; color:var(--text-secondary); line-height:1.55; margin-bottom:8px;
+  }
+  .criterion-levels-row { display:flex; gap:8px; flex-wrap:wrap; align-items:flex-start; }
+  .criterion-level-block { display:flex; flex-direction:column; gap:3px; flex:1; min-width:80px; }
+  .criterion-level-tag {
+    font-size:10px; font-weight:500; padding:2px 7px;
+    border-radius:20px; text-align:center; display:inline-block;
+  }
+  .criterion-level-text { font-size:10px; color:var(--text-tertiary); line-height:1.4; }
 
-  /* Session summary */
+  /* ── Nudge text ─────────────────────────────────────── */
+  .nudge-text {
+    font-size:12px; color:var(--text-tertiary);
+    margin-bottom:8px; padding:3px 0;
+    transition:opacity .5s ease; font-style:italic;
+  }
+
+  /* ── Session summary ────────────────────────────────── */
   #session-summary-wrap { margin-top:16px; }
   .summary-card { border:1px solid var(--border); border-radius:12px; background:var(--bg-primary); overflow:hidden; }
   .summary-section { padding:16px 18px; border-bottom:1px solid var(--border); }
@@ -199,7 +275,6 @@
   .thread-source { font-size:11px; color:var(--text-tertiary); margin-top:2px; }
 
   .summary-footer { display:flex; gap:8px; padding:16px 18px; }
-
   .summary-loading { text-align:center; padding:32px; }
   .summary-loading-text { font-size:13px; color:var(--text-secondary); margin-top:10px; }
 </style>
@@ -228,11 +303,76 @@
 {% endblock %}
 
 {% block content %}
-<div style="margin-bottom:16px;">
+<div style="margin-bottom:12px;">
   <h1 class="page-title">Dialogic prompting</h1>
 </div>
 
-{# ── Pre-conversation display (full card before first exchange) ── #}
+{# ── Scaffold bar — hidden before first exchange, always visible after ── #}
+<div id="scaffold-bar" class="scaffold-bar"{% if not exchanges %} style="display:none;"{% endif %}>
+
+  {# Brief bar row #}
+  <div class="scaffold-brief-row" onclick="toggleBrief()">
+    <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24" style="color:var(--text-tertiary);flex-shrink:0;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+    <span class="brief-bar-title">{{ assignment.title }}</span>
+    {% if assignment.modality %}
+    <span class="brief-modality-pill">{{ assignment.modality | title }}</span>
+    {% endif %}
+    <svg id="brief-chevron" class="brief-chevron" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+      <polyline points="6 9 12 15 18 9"/>
+    </svg>
+  </div>
+
+  {# Brief expandable body #}
+  <div class="brief-body" id="brief-body">
+    <div class="brief-body-inner">
+      {% if assignment.instructions %}
+      {{ assignment.instructions }}
+      {% else %}
+      <span style="color:var(--text-secondary);">{{ assignment.description }}</span>
+      {% endif %}
+    </div>
+  </div>
+
+  {# Phase indicator strip #}
+  <div class="scaffold-phase">
+    <span class="pill pill-orange" style="font-size:10px;padding:2px 8px;flex-shrink:0;" id="strip-phase-pill">Phase {{ current_phase }} of 3</span>
+    <span class="strip-sep"></span>
+    <span class="strip-exchange" id="strip-exchange-label">Exchange {{ exchange_count }} of {{ min_exchanges }} minimum</span>
+    <span class="strip-sep"></span>
+    <span class="strip-desc" id="strip-description"></span>
+  </div>
+
+  {# Compact criteria panel #}
+  <div class="scaffold-criteria">
+    <span class="criteria-panel-label">How you will be assessed</span>
+    {% for c in archetype_data.criteria %}
+    <button class="criteria-cpill" onclick="showCriterion({{ loop.index0 }})">{{ c.criterion_name }}</button>
+    {% endfor %}
+  </div>
+
+  {# Criterion detail (shown on pill click) #}
+  <div id="criterion-detail" class="criterion-detail" style="display:none;">
+    <div class="criterion-detail-name" id="criterion-detail-name"></div>
+    <div class="criterion-detail-desc" id="criterion-detail-desc"></div>
+    <div class="criterion-levels-row">
+      <div class="criterion-level-block">
+        <span class="criterion-level-tag level-emerging">Needs work</span>
+        <span class="criterion-level-text" id="criterion-level-emerging"></span>
+      </div>
+      <div class="criterion-level-block">
+        <span class="criterion-level-tag level-developing">Developing</span>
+        <span class="criterion-level-text" id="criterion-level-developing"></span>
+      </div>
+      <div class="criterion-level-block">
+        <span class="criterion-level-tag level-integrated">Completed</span>
+        <span class="criterion-level-text" id="criterion-level-integrated"></span>
+      </div>
+    </div>
+  </div>
+
+</div>{# /scaffold-bar #}
+
+{# ── Pre-conversation display (shown only before first exchange) ── #}
 {% if not exchanges %}
 <div id="pre-conv-card" class="card" style="margin-bottom:16px;">
   <div style="font-size:11px;font-weight:500;color:var(--text-secondary);margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em;">Assignment brief</div>
@@ -270,15 +410,15 @@
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">
       {% set phases = archetype_data.phases %}
       <div style="border:1px solid var(--border);border-radius:8px;padding:10px 12px;background:var(--bg-surface);">
-        <div style="font-size:12px;font-weight:600;color:var(--text-orange);margin-bottom:4px;">PHASE 1 &middot; EXCHANGES 1–{{ assignment.phase_1_end }}</div>
+        <div style="font-size:12px;font-weight:600;color:var(--text-orange);margin-bottom:4px;">PHASE 1 &middot; EXCHANGES 1–{{ phase_1_end }}</div>
         <div style="font-size:14px;color:var(--text-secondary);line-height:1.55;">{{ phases[0] if phases|length > 0 else '' }}</div>
       </div>
       <div style="border:1px solid var(--border);border-radius:8px;padding:10px 12px;background:var(--bg-surface);">
-        <div style="font-size:12px;font-weight:600;color:var(--text-orange);margin-bottom:4px;">PHASE 2 &middot; EXCHANGES {{ assignment.phase_1_end + 1 }}–{{ assignment.phase_2_end }}</div>
+        <div style="font-size:12px;font-weight:600;color:var(--text-orange);margin-bottom:4px;">PHASE 2 &middot; EXCHANGES {{ phase_1_end + 1 }}–{{ phase_2_end }}</div>
         <div style="font-size:14px;color:var(--text-secondary);line-height:1.55;">{{ phases[1] if phases|length > 1 else '' }}</div>
       </div>
       <div style="border:1px solid var(--border);border-radius:8px;padding:10px 12px;background:var(--bg-surface);">
-        <div style="font-size:12px;font-weight:600;color:var(--text-orange);margin-bottom:4px;">PHASE 3 &middot; EXCHANGES {{ assignment.phase_2_end + 1 }}+</div>
+        <div style="font-size:12px;font-weight:600;color:var(--text-orange);margin-bottom:4px;">PHASE 3 &middot; EXCHANGES {{ phase_2_end + 1 }}+</div>
         <div style="font-size:14px;color:var(--text-secondary);line-height:1.55;">{{ phases[2] if phases|length > 2 else '' }}</div>
       </div>
     </div>
@@ -308,44 +448,9 @@
     <button class="btn btn-primary" onclick="document.getElementById('student-input').focus();document.getElementById('student-input').scrollIntoView({behavior:'smooth'});">Start conversation</button>
   </div>
 </div>
-{% else %}
-{# Collapsed archetype pill — shown after first exchange #}
-<div id="archetype-pill" class="archetype-pill" onclick="togglePreConvExpanded()" style="margin-bottom:12px;">
-  <i class="ti ti-robot" style="font-size:12px;"></i>
-  {{ archetype_data.name }}
-  <span id="pill-expand-label" style="color:var(--text-tertiary);">Show session info</span>
-</div>
-{# Collapsible pre-conv info (hidden by default after first exchange) #}
-<div id="pre-conv-expanded" class="card" style="display:none;margin-bottom:16px;">
-  {% if assignment.concepts_required %}
-  <div style="margin-bottom:12px;">
-    <div style="font-size:11px;font-weight:500;color:var(--text-secondary);margin-bottom:6px;">Required concepts</div>
-    <div style="display:flex;flex-wrap:wrap;gap:6px;">
-      {% for concept in course.required_concepts %}
-      <span class="pill pill-orange">{{ concept }}</span>
-      {% endfor %}
-    </div>
-  </div>
-  {% endif %}
-  <div class="criteria-grid">
-    {% for c in archetype_data.criteria %}
-    <div class="criteria-card">
-      <div class="criteria-name">{{ c.criterion_name }}</div>
-      <div class="criteria-desc">{{ c.criterion_description }}</div>
-      <div class="criteria-levels">
-        <span class="criteria-level-label level-emerging">Needs work</span>
-        <span class="criteria-level-arrow">→</span>
-        <span class="criteria-level-label level-developing">Developing</span>
-        <span class="criteria-level-arrow">→</span>
-        <span class="criteria-level-label level-integrated">Completed</span>
-      </div>
-    </div>
-    {% endfor %}
-  </div>
-</div>
 {% endif %}
 
-{# ── Phase track ── #}
+{# ── Workflow phase track ── #}
 {% set challenge_done = exchange_count >= min_exchanges and pushback_count >= 1 %}
 {% set orient_cls    = 'done' if exchange_count >= 1 else 'active' %}
 {% set challenge_cls = 'done' if challenge_done else ('active' if exchange_count >= 1 else '') %}
@@ -372,7 +477,7 @@
   </div>
 </div>
 
-{# ── Progress pills — only show concept pills when concepts_required ── #}
+{# ── Progress pills ── #}
 <div class="progress-row" id="progress-row">
   <span class="pill pill-gray" id="exchange-pill">{{ exchange_count }} / {{ min_exchanges }} exchanges</span>
   <span class="pill {% if pushback_count > 0 %}pill-green{% else %}pill-gray{% endif %}" id="pushback-pill">
@@ -447,6 +552,9 @@
 
   </div><!-- /.chat-wrap -->
 
+  {# Nudge text — appears above input after every 2nd AI response #}
+  <div id="nudge-text" class="nudge-text" style="display:none;opacity:0;"></div>
+
   <div class="chat-input-row">
     <textarea id="student-input" rows="3"
       placeholder="Share your position, push back on the AI, or build on the last response…"></textarea>
@@ -493,27 +601,193 @@
 
 {% block page_scripts %}
 <script>
-  let exchangeCount = {{ exchange_count }};
-  const minExchanges = {{ min_exchanges }};
-  let pushbackCount = {{ pushback_count }};
-  const hasOutput = {{ 'true' if has_output else 'false' }};
-  const hasReflection = {{ 'true' if has_reflection else 'false' }};
-  let conceptsUsed = new Set({{ concepts_used | tojson }});
+  /* ── State passed from server ─────────────────────────── */
+  let exchangeCount     = {{ exchange_count }};
+  const minExchanges    = {{ min_exchanges }};
+  let pushbackCount     = {{ pushback_count }};
+  const hasOutput       = {{ 'true' if has_output else 'false' }};
+  const hasReflection   = {{ 'true' if has_reflection else 'false' }};
+  let conceptsUsed      = new Set({{ concepts_used | tojson }});
   const requiredConcepts = {{ required_concepts | tojson }};
   const conceptsRequired = {{ 'true' if assignment.concepts_required else 'false' }};
 
-  function togglePreConvExpanded() {
-    const panel = document.getElementById('pre-conv-expanded');
-    const label = document.getElementById('pill-expand-label');
-    if (panel.style.display === 'none') {
-      panel.style.display = 'block';
-      label.textContent = 'Hide';
-    } else {
-      panel.style.display = 'none';
-      label.textContent = 'Show session info';
-    }
+  /* ── Archetype / phase config ─────────────────────────── */
+  const archetypeKey = '{{ assignment.archetype or "challenger" }}';
+  const phase1End    = {{ phase_1_end }};
+  const phase2End    = {{ phase_2_end }};
+  const CRITERIA     = {{ archetype_data.criteria | tojson }};
+
+  /* Phase descriptions per archetype */
+  const PHASE_DESCRIPTIONS = {
+    design_thinker: {
+      1: 'AI is exploring the problem space with you — no solutions yet.',
+      2: 'AI is deepening the directions you are most drawn to.',
+      3: 'AI is helping you make decisions and develop your chosen direction.',
+    },
+    challenger: {
+      1: 'AI is building the strongest version of your argument.',
+      2: 'AI is introducing challenges and complications.',
+      3: 'AI is probing the remaining weaknesses in your argument.',
+    },
+    prober: {
+      1: 'AI is asking broad questions to surface what you already know.',
+      2: 'AI is probing the foundations of your strongest claims.',
+      3: 'AI is asking questions to help you synthesize your thinking.',
+    },
+    narrative_coach: {
+      1: 'AI is helping you find your authentic voice.',
+      2: 'AI is helping you build your narrative structure.',
+      3: 'AI is helping you decide what to keep, cut, and sharpen.',
+    },
+  };
+
+  /* Nudge messages per archetype and phase */
+  const NUDGES = {
+    design_thinker: {
+      1: [
+        'Have you explored a direction that surprises you?',
+        'What if you approached this from a completely different angle?',
+        'Have you considered what your audience most needs to understand?',
+      ],
+      2: [
+        'Which direction keeps pulling you back — why?',
+        'What is missing from this concept that would make it feel complete?',
+        'Push this idea further — what are three different ways to execute it?',
+      ],
+      3: [
+        'Which direction best serves your learning objective and why?',
+        'What is the one thing that is not working yet?',
+        'Can you articulate why you are choosing this direction over the others?',
+      ],
+    },
+    challenger: {
+      1: [
+        'What is the strongest version of your position?',
+        'What evidence best supports your argument?',
+        'What would make your argument even harder to challenge?',
+      ],
+      2: [
+        'Try pushing back with a course concept.',
+        "What is the weakness in AI's counterargument?",
+        'Can you defend your position with specific evidence?',
+      ],
+      3: [
+        'What vulnerability remains in your argument?',
+        'Where is your reasoning least convincing?',
+        'What would your strongest critic say?',
+      ],
+    },
+    prober: {
+      1: [
+        'Try answering with more specificity than your last response.',
+        'What do you know about this that you feel most confident in?',
+        'What feels most uncertain or unresolved?',
+      ],
+      2: [
+        'What is that certainty based on?',
+        'What would have to be true for your claim to be wrong?',
+        'What are you assuming your reader already accepts?',
+      ],
+      3: [
+        'How has your thinking shifted since you started?',
+        'What is the one idea you feel most confident defending?',
+        'What would strengthen your position?',
+      ],
+    },
+    narrative_coach: {
+      1: [
+        'Does this feel like your voice or a generic version of it?',
+        'Who are you imagining as you write this?',
+        'What do you most want your audience to feel?',
+      ],
+      2: [
+        'Which idea needs to come first for the others to make sense?',
+        'Where is the turning point in your narrative?',
+        'What is the one thing you most want your audience to remember?',
+      ],
+      3: [
+        'Which version of this idea is most you?',
+        'What are you holding onto that you should probably cut?',
+        'What is the one sentence you would be most proud of?',
+      ],
+    },
+  };
+
+  /* Nudge state — per-phase index so cycling works across phase transitions */
+  const nudgePhaseIndex = {1: 0, 2: 0, 3: 0};
+  let activeCriterion = -1;
+  let briefOpen = false;
+
+  /* ── Phase helpers ────────────────────────────────────── */
+  function getCurrentPhase() {
+    if (exchangeCount <= phase1End) return 1;
+    if (exchangeCount <= phase2End) return 2;
+    return 3;
   }
 
+  function updatePhaseStrip() {
+    const phase = getCurrentPhase();
+    const desc  = (PHASE_DESCRIPTIONS[archetypeKey] || {})[phase] || '';
+    document.getElementById('strip-phase-pill').textContent    = `Phase ${phase} of 3`;
+    document.getElementById('strip-exchange-label').textContent = `Exchange ${exchangeCount} of ${minExchanges} minimum`;
+    document.getElementById('strip-description').textContent   = desc;
+  }
+
+  /* ── Brief bar toggle ─────────────────────────────────── */
+  function toggleBrief() {
+    briefOpen = !briefOpen;
+    document.getElementById('brief-body').classList.toggle('open', briefOpen);
+    document.getElementById('brief-chevron').classList.toggle('open', briefOpen);
+  }
+
+  /* ── Criteria panel ───────────────────────────────────── */
+  function showCriterion(idx) {
+    if (activeCriterion === idx) {
+      hideCriterionDetail();
+      return;
+    }
+    activeCriterion = idx;
+    const c = CRITERIA[idx];
+    if (!c) return;
+    document.getElementById('criterion-detail-name').textContent      = c.criterion_name || '';
+    document.getElementById('criterion-detail-desc').textContent      = c.criterion_description || '';
+    document.getElementById('criterion-level-emerging').textContent   = c.level_emerging || '';
+    document.getElementById('criterion-level-developing').textContent = c.level_developing || '';
+    document.getElementById('criterion-level-integrated').textContent = c.level_integrated || '';
+    document.getElementById('criterion-detail').style.display = 'block';
+    document.querySelectorAll('.criteria-cpill').forEach((p, i) => {
+      p.classList.toggle('active', i === idx);
+    });
+  }
+
+  function hideCriterionDetail() {
+    activeCriterion = -1;
+    document.getElementById('criterion-detail').style.display = 'none';
+    document.querySelectorAll('.criteria-cpill').forEach(p => p.classList.remove('active'));
+  }
+
+  /* ── Nudge system ─────────────────────────────────────── */
+  function showNudge() {
+    const phase = getCurrentPhase();
+    const msgs  = ((NUDGES[archetypeKey] || {})[phase]) || [];
+    if (!msgs.length) return;
+    const idx = nudgePhaseIndex[phase] % msgs.length;
+    nudgePhaseIndex[phase] = idx + 1;
+    const el = document.getElementById('nudge-text');
+    el.textContent  = msgs[idx];
+    el.style.opacity = '0';
+    el.style.display = 'block';
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => { el.style.opacity = '1'; });
+    });
+  }
+
+  function hideNudge() {
+    const el = document.getElementById('nudge-text');
+    if (el) { el.style.opacity = '0'; el.style.display = 'none'; }
+  }
+
+  /* ── Workflow phase track ─────────────────────────────── */
   function updatePhaseTrack() {
     const challengeDone = exchangeCount >= minExchanges && pushbackCount >= 1;
     const states = {
@@ -528,12 +802,13 @@
     }
   }
 
+  /* ── Helpers ──────────────────────────────────────────── */
   function escHtml(str) {
     return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
   }
 
   function appendUserMessage(text, num, concepts, hasPushback) {
-    const now = new Date();
+    const now  = new Date();
     const time = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
     let tags = '';
     if (conceptsRequired) {
@@ -557,11 +832,12 @@
     document.getElementById('chat-wrap').insertBefore(el, document.getElementById('typing-indicator'));
   }
 
+  /* ── Send message ─────────────────────────────────────── */
   async function sendMessage() {
-    const input  = document.getElementById('student-input');
+    const input   = document.getElementById('student-input');
     const sendBtn = document.getElementById('send-btn');
     const errorEl = document.getElementById('send-error');
-    const text = input.value.trim();
+    const text    = input.value.trim();
     if (!text) return;
 
     errorEl.style.display = 'none';
@@ -569,19 +845,27 @@
     sendBtn.textContent = '…';
     input.disabled = true;
 
+    // Remove guidelines card (present on first message)
     const guidelines = document.getElementById('guidelines-card');
     if (guidelines) guidelines.remove();
 
-    // Collapse pre-conv card on first send
+    // On first message: remove pre-conv card and reveal scaffold bar
     const preConvCard = document.getElementById('pre-conv-card');
-    if (preConvCard) preConvCard.remove();
+    if (preConvCard) {
+      preConvCard.remove();
+      const sb = document.getElementById('scaffold-bar');
+      if (sb) sb.style.display = 'block';
+    }
+
+    // Hide any nudge while waiting
+    hideNudge();
 
     showTypingIndicator();
 
     try {
       const resp = await fetch('{{ url_for("student.prompting") }}', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
         body: JSON.stringify({ student_message: text }),
       });
       const data = await resp.json();
@@ -594,9 +878,11 @@
 
       exchangeCount = data.exchange_number;
       if (data.has_pushback) pushbackCount++;
-      updatePhaseTrack();
 
-      // Update concept pills only when concepts_required
+      updatePhaseTrack();
+      updatePhaseStrip();
+
+      // Update progress pills
       if (conceptsRequired) {
         data.concepts_applied.forEach(c => conceptsUsed.add(c));
         document.querySelectorAll('[data-concept]').forEach(pill => {
@@ -618,6 +904,11 @@
         document.getElementById('review-btn-wrap').style.display = 'flex';
       }
 
+      // Show nudge after every 2nd AI response
+      if (exchangeCount % 2 === 0) {
+        setTimeout(showNudge, 700);
+      }
+
       input.value = '';
 
     } catch (err) {
@@ -632,11 +923,15 @@
     }
   }
 
+  // Hide nudge when student starts typing or focuses input
+  document.getElementById('student-input').addEventListener('focus', hideNudge);
+  document.getElementById('student-input').addEventListener('keydown', hideNudge);
+
   document.getElementById('student-input').addEventListener('keydown', e => {
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) sendMessage();
   });
 
-  // ── Session summary ──────────────────────────────────────────────────────
+  // ── Session summary ────────────────────────────────────────────────────────
   let summaryLoaded = false;
 
   async function loadSessionSummary() {
@@ -694,10 +989,8 @@
     const wrap = document.getElementById('session-summary-wrap');
     const conceptScores = data.concept_scores || [];
 
-    // Concept tiles
     let conceptTiles = '';
     if (!conceptsRequired) {
-      // Free-form: show only detected concepts
       conceptTiles = conceptScores.map(cs => {
         const isStudent = cs.introduced_by === 'student';
         return `
@@ -709,7 +1002,6 @@
       }).join('');
       if (!conceptTiles) conceptTiles = `<div style="font-size:12px;color:var(--text-tertiary);">No concepts detected yet.</div>`;
     } else {
-      // Required concepts: show all, highlight applied ones
       const scoreMap = {};
       conceptScores.forEach(cs => { scoreMap[cs.concept_name] = cs; });
       requiredConcepts.forEach(name => {
@@ -725,8 +1017,7 @@
       });
     }
 
-    // Key moments
-    const momentIcons = { strongest: 'icon-strongest', pushback: 'icon-pushback', gap: 'icon-gap' };
+    const momentIcons   = { strongest: 'icon-strongest', pushback: 'icon-pushback', gap: 'icon-gap' };
     const momentSymbols = { strongest: '★', pushback: '↩', gap: '○' };
     const keyMoments = (data.key_moments || []).map(m => `
       <div class="key-moment-row">
@@ -738,7 +1029,6 @@
         </div>
       </div>`).join('');
 
-    // Criteria scores
     const criteriaScores = (data.criteria_scores || []).map(cs => `
       <div class="criteria-score-cell">
         <div class="criteria-score-name">${escHtml(cs.criterion_name || '')}</div>
@@ -795,7 +1085,7 @@
       </div>`;
   }
 
-  // ── Web Speech API ────────────────────────────────────────────────────────
+  // ── Web Speech API ─────────────────────────────────────────────────────────
   const micBtn    = document.getElementById('mic-btn');
   const micStatus = document.getElementById('mic-status');
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -853,5 +1143,13 @@
     micStatus.style.display = 'none';
     recognition.stop();
   }
+
+  // ── Init ───────────────────────────────────────────────────────────────────
+  document.addEventListener('DOMContentLoaded', () => {
+    scrollChatToBottom();
+    if (exchangeCount > 0) {
+      updatePhaseStrip();
+    }
+  });
 </script>
 {% endblock %}

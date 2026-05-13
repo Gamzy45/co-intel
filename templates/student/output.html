@@ -124,7 +124,7 @@
     try {
       const resp = await fetch('{{ url_for("student.output") }}', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
         body: JSON.stringify({ modality, content }),
       });
       const data = await resp.json();

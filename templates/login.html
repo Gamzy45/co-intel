@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Sign in — Co-Intelligence</title>
+  <meta name="csrf-token" content="{{ csrf_token() }}" />
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
   <style>
     html, body { height: 100%; }
@@ -227,6 +228,10 @@
 </style>
 
 <script>
+  function getCsrfToken() {
+    return document.querySelector('meta[name="csrf-token"]')?.content || '';
+  }
+
   let pendingCode = '';
 
   function showError(id, msg) { document.getElementById(id).textContent = msg; }
@@ -246,7 +251,7 @@
     try {
       const resp = await fetch('{{ url_for("login_check") }}', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
         body: JSON.stringify({ code: raw }),
       });
       const data = await resp.json();
@@ -288,7 +293,7 @@
     try {
       const resp = await fetch('{{ url_for("login_register") }}', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
         body: JSON.stringify({ code: pendingCode, first_name: firstName, last_initial: lastInitial }),
       });
       const data = await resp.json();
@@ -317,7 +322,7 @@
     try {
       const resp = await fetch('{{ url_for("login_signin") }}', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
         body: JSON.stringify({ code: pendingCode, first_name: firstName, last_initial: lastInitial }),
       });
       const data = await resp.json();

@@ -368,7 +368,7 @@
     try {
       const resp = await fetch(SAVE_BRIEF_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
         body: JSON.stringify({ instructions, modality }),
       });
       const data = await resp.json();
@@ -386,7 +386,7 @@
     try {
       const resp = await fetch(SAVE_AI_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
         body: JSON.stringify({
           archetype:                 selectedArchetype,
           contribution_level:        selectedContrib,
@@ -429,7 +429,7 @@
     try {
       const resp = await fetch('{{ url_for("instructor.reflection_config") }}', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
         body: JSON.stringify(body),
       });
       const data = await resp.json();

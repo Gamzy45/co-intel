@@ -1,6 +1,15 @@
 "use strict";
 
 /* ================================================================
+   CSRF token helper
+   Reads the token from the <meta name="csrf-token"> tag injected
+   by base.html so all fetch POST calls can include it as a header.
+   ================================================================ */
+function getCsrfToken() {
+  return document.querySelector('meta[name="csrf-token"]')?.content || '';
+}
+
+/* ================================================================
    Typing indicator
    Shows / hides the three-dot bounce animation in the chat while
    waiting for an AI response.
@@ -86,7 +95,7 @@ async function submitReflectionForm(postUrl) {
   try {
     const resp = await fetch(postUrl, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "X-CSRFToken": getCsrfToken() },
       body: JSON.stringify({ question_1: q1, question_2: q2, question_3: q3 }),
     });
     const data = await resp.json();

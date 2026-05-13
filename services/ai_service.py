@@ -1,5 +1,6 @@
 import json
 import os
+from typing import Optional
 
 import anthropic
 from dotenv import load_dotenv
@@ -29,10 +30,19 @@ def _truncate_to_sentence(text: str, max_words: int) -> str:
     return text[: last_boundary + 1]
 
 
+def _anonymize(text: str, student_name: Optional[str]) -> str:
+    """Replace student display_name with 'student' to avoid sending PII to the API."""
+    if not student_name or not text:
+        return text
+    import re as _re
+    return _re.sub(_re.escape(student_name), "student", text, flags=_re.IGNORECASE)
+
+
 def get_ai_response(
     student_message: str,
     conversation_history: list[dict],
     system_prompt: str,
+    student_name: Optional[str] = None,
 ) -> str:
     """
     Send the current student message (with full conversation history) to Claude
@@ -41,8 +51,14 @@ def get_ai_response(
     """
     print("SYSTEM PROMPT:", system_prompt, flush=True)
 
-    messages = list(conversation_history) + [
-        {"role": "user", "content": student_message}
+    clean_message = _anonymize(student_message, student_name)
+    clean_history = [
+        {**msg, "content": _anonymize(msg["content"], student_name)}
+        for msg in conversation_history
+    ]
+
+    messages = clean_history + [
+        {"role": "user", "content": clean_message}
     ]
 
     response = _client().messages.create(

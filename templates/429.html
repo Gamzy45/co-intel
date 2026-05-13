@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Too many requests — Co-Intelligence</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+  <style>
+    html, body { height: 100%; }
+    .error-wrap {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg-primary);
+    }
+    .error-card {
+      width: 380px;
+      padding: 44px 40px 36px;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      background: var(--bg-primary);
+      text-align: center;
+    }
+    .error-logo {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 16px;
+      font-weight: 500;
+      color: var(--text-primary);
+      justify-content: center;
+      margin-bottom: 32px;
+    }
+    .error-logo .logo-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: #E8602A; flex-shrink: 0;
+    }
+    .error-title {
+      font-size: 18px;
+      font-weight: 500;
+      color: var(--text-primary);
+      margin-bottom: 12px;
+    }
+    .error-message {
+      font-size: 14px;
+      color: var(--text-secondary);
+      line-height: 1.6;
+      margin-bottom: 28px;
+    }
+  </style>
+</head>
+<body>
+<div class="error-wrap">
+  <div class="error-card">
+    <div class="error-logo">
+      <span class="logo-dot"></span>
+      Co-Intelligence
+    </div>
+    <div class="error-title">Too many attempts</div>
+    <div class="error-message">
+      You have made too many attempts. Please wait a moment and try again.
+    </div>
+    <a href="{{ url_for('login') }}" class="btn btn-primary" style="justify-content:center;">
+      Back to sign in
+    </a>
+  </div>
+</div>
+</body>
+</html>

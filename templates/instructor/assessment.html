@@ -216,7 +216,7 @@
     try {
       const resp = await fetch(
         '{{ url_for("instructor.assessment_generate", student_id=student.id) }}',
-        { method: 'POST' }
+        { method: 'POST', headers: { 'X-CSRFToken': getCsrfToken() } }
       );
       const data = await resp.json();
       if (data.success) {
@@ -241,7 +241,7 @@
     try {
       const resp = await fetch(
         '{{ url_for("instructor.regenerate_summary", student_id=student.id) }}',
-        { method: 'POST' }
+        { method: 'POST', headers: { 'X-CSRFToken': getCsrfToken() } }
       );
       const data = await resp.json();
       if (data.success) {
@@ -272,7 +272,7 @@
     try {
       const resp = await fetch('{{ url_for("instructor.assessment_feedback", student_id=student.id) }}', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
         body: JSON.stringify({ feedback_text: text }),
       });
       const data = await resp.json();

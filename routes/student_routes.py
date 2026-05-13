@@ -116,6 +116,7 @@ def prompting():
                 student_message=student_message,
                 conversation_history=history,
                 system_prompt=system_prompt,
+                student_name=student.name if student else None,
             )
 
             exchange_number = len(exchanges) + 1
@@ -191,6 +192,8 @@ def prompting():
         feedback=feedback,
         archetype_data=archetype_data,
         current_phase=current_phase,
+        phase_1_end=phase_1_end,
+        phase_2_end=phase_2_end,
     )
 
 

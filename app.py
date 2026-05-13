@@ -8,6 +8,12 @@ from dotenv import load_dotenv
 from extensions import db, login_manager
 from flask_login import login_user, logout_user, current_user
 from flask_talisman import Talisman
+from flask_wtf.csrf import CSRFProtect
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+
+csrf = CSRFProtect()
+limiter = Limiter(key_func=get_remote_address, default_limits=["200 per day", "50 per hour"])
 
 load_dotenv()
 
@@ -54,13 +60,20 @@ def create_app():
 
     db.init_app(app)
     login_manager.init_app(app)
+    csrf.init_app(app)
+    limiter.init_app(app)
 
     # ---- Security: HTTP headers via Talisman ----
     Talisman(
         app,
-        force_https=False,
+        force_https=_IS_PRODUCTION,
         content_security_policy=False,
+        frame_options="DENY",
     )
+
+    @app.errorhandler(429)
+    def ratelimit_handler(e):
+        return render_template("429.html"), 429
 
     from models.models import User
 
@@ -91,6 +104,7 @@ def create_app():
         return render_template("login.html")
 
     @app.route("/login/check", methods=["POST"])
+    @limiter.limit("30 per minute")
     def login_check():
         from models.models import AccessCode
         from services.audit import log_login_success, log_login_failed
@@ -220,6 +234,7 @@ def create_app():
         return redirect(url_for("login"))
 
     @app.route("/dev/reset", methods=["POST"])
+    @csrf.exempt
     def dev_reset():
         from services.audit import log_dev_reset
         if not current_user.is_authenticated or not current_user.is_dev:
