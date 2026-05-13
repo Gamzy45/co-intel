@@ -29,9 +29,7 @@
       transition: background .12s, color .12s;
       white-space: nowrap;
     }
-    .topbar-toggle:hover {
-      color: var(--text-primary);
-    }
+    .topbar-toggle:hover { color: var(--text-primary); }
     .topbar-toggle.active {
       background: var(--bg-primary);
       color: var(--text-primary);
@@ -44,22 +42,26 @@
       gap: 8px;
     }
     .user-avatar {
-      width: 28px;
-      height: 28px;
-      border-radius: 50%;
+      width: 28px; height: 28px; border-radius: 50%;
       background: var(--bg-orange-light);
       color: var(--text-orange);
-      font-size: 10px;
-      font-weight: 500;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      font-size: 10px; font-weight: 500;
+      display: flex; align-items: center; justify-content: center;
       flex-shrink: 0;
     }
-    .user-name {
-      font-size: 13px;
+    .user-name { font-size: 13px; color: var(--text-secondary); }
+    /* ---- Dev reset button ---- */
+    .dev-reset-btn {
+      font-size: 11px;
+      padding: 4px 10px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--bg-surface);
       color: var(--text-secondary);
+      cursor: pointer;
+      font-family: inherit;
     }
+    .dev-reset-btn:hover { background: var(--bg-primary); color: var(--text-primary); }
   </style>
   <style>
     :root {
@@ -78,12 +80,16 @@
 {% set is_student    = request.path.startswith('/student') %}
 {% set is_instructor = request.path.startswith('/instructor') %}
 
-{% if is_student %}
-  {% set _user_name     = "Alex M." %}
-  {% set _user_initials = "AM" %}
+{% if current_user.is_authenticated %}
+  {% set _display = current_user.display_name %}
+  {% set _parts   = _display.split() %}
+  {% set _initials = (_parts[0][0] + (_parts[1][0] if _parts|length > 1 else ''))|upper %}
+{% elif is_student %}
+  {% set _display  = "Alex M." %}
+  {% set _initials = "AM" %}
 {% else %}
-  {% set _user_name     = "Instructor" %}
-  {% set _user_initials = "IN" %}
+  {% set _display  = "Instructor" %}
+  {% set _initials = "IN" %}
 {% endif %}
 
 <div class="app">
@@ -97,38 +103,62 @@
     </a>
 
     <div class="topbar-toggles">
-      <a href="{{ url_for('student.prompting') }}"
-         class="topbar-toggle{% if is_student %} active{% endif %}">
-        Student view
-      </a>
-      <a href="{{ url_for('instructor.dashboard') }}"
-         class="topbar-toggle{% if is_instructor %} active{% endif %}">
-        Instructor view
-      </a>
+      {% if current_user.is_authenticated and current_user.role == 'student' %}
+        <span class="topbar-toggle active" style="cursor:default;">Student view</span>
+      {% else %}
+        <a href="{{ url_for('student.prompting') }}"
+           class="topbar-toggle{% if is_student %} active{% endif %}">
+          Student view
+        </a>
+        <a href="{{ url_for('instructor.dashboard') }}"
+           class="topbar-toggle{% if is_instructor %} active{% endif %}">
+          Instructor view
+        </a>
+      {% endif %}
     </div>
 
     <div class="topbar-user">
-      <div class="user-avatar">{{ _user_initials }}</div>
-      <span class="user-name">{{ _user_name }}</span>
-      <a href="{{ url_for('login') }}" style="font-size:12px;color:var(--text-tertiary);text-decoration:none;margin-left:6px;">Sign out</a>
+      {% if current_user.is_authenticated and current_user.is_dev %}
+      <button class="dev-reset-btn" id="dev-reset-btn" onclick="devReset()">Reset demo data</button>
+      {% endif %}
+      <div class="user-avatar">{{ _initials }}</div>
+      <span class="user-name">{{ _display }}</span>
+      <a href="{{ url_for('logout') }}"
+         style="font-size:12px;color:var(--text-tertiary);text-decoration:none;margin-left:6px;">
+        Sign out
+      </a>
     </div>
 
   </div><!-- /.topbar -->
 
   <div class="main">
-
-    <!-- Sidebar: overridden by each child template -->
     {% block sidebar %}{% endblock %}
-
-    <!-- Main content area -->
     <div class="content">
       {% block content %}{% endblock %}
     </div>
-
   </div><!-- /.main -->
+
 </div><!-- /.app -->
 
 <script src="{{ url_for('static', filename='app.js') }}"></script>
+{% if current_user.is_authenticated and current_user.is_dev %}
+<script>
+  async function devReset() {
+    const btn = document.getElementById('dev-reset-btn');
+    if (!confirm('Reset all demo data? This deletes all exchanges, reflections, outputs, and assessments for demo students.')) return;
+    btn.textContent = 'Resetting…';
+    btn.disabled = true;
+    try {
+      const resp = await fetch('/dev/reset', { method: 'POST' });
+      const data = await resp.json();
+      if (data.success) location.reload();
+      else { btn.textContent = 'Reset demo data'; btn.disabled = false; }
+    } catch (e) {
+      btn.textContent = 'Reset demo data'; btn.disabled = false;
+    }
+  }
+</script>
+{% endif %}
 {% block page_scripts %}{% endblock %}
 </body>
 </html>

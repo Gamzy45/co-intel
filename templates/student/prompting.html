@@ -75,11 +75,11 @@
     border:1px solid var(--border); border-radius:10px; padding:12px 14px;
     background:var(--bg-primary);
   }
-  .criteria-name { font-size:12px; font-weight:500; color:var(--text-primary); margin-bottom:4px; }
-  .criteria-desc { font-size:11px; color:var(--text-secondary); margin-bottom:8px; line-height:1.55; }
+  .criteria-name { font-size:15px; font-weight:500; color:var(--text-primary); margin-bottom:4px; }
+  .criteria-desc { font-size:14px; color:var(--text-secondary); margin-bottom:8px; line-height:1.55; }
   .criteria-levels { display:flex; gap:4px; align-items:center; }
   .criteria-level-label {
-    font-size:10px; padding:2px 7px; border-radius:20px; flex:1; text-align:center;
+    font-size:13px; padding:2px 7px; border-radius:20px; flex:1; text-align:center;
   }
   .level-emerging   { background:var(--bg-surface); color:var(--text-tertiary); }
   .level-developing { background:#FEF3E2; color:#92580a; }
@@ -237,6 +237,12 @@
 <div id="pre-conv-card" class="card" style="margin-bottom:16px;">
   <div style="font-size:11px;font-weight:500;color:var(--text-secondary);margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em;">Assignment brief</div>
 
+  {% if assignment.modality %}
+  <div style="margin-bottom:8px;">
+    <span style="display:inline-block;font-size:11px;color:var(--text-secondary);background:var(--bg-surface);border:1px solid var(--border);border-radius:20px;padding:2px 10px;">{{ assignment.modality | title }}</span>
+  </div>
+  {% endif %}
+
   {% if assignment.instructions %}
   <div style="font-size:13px;color:var(--text-primary);line-height:1.65;margin-bottom:14px;">{{ assignment.instructions }}</div>
   {% else %}
@@ -253,34 +259,34 @@
     </div>
   </div>
   {% else %}
-  <div style="font-size:12px;color:var(--text-secondary);margin-bottom:14px;font-style:italic;">
+  <div style="font-size:14px;color:var(--text-secondary);margin-bottom:14px;font-style:italic;">
     Draw on any relevant course concepts as you develop your thinking.
   </div>
   {% endif %}
 
   {# Phase columns #}
   <div style="margin-bottom:14px;">
-    <div style="font-size:11px;font-weight:500;color:var(--text-secondary);margin-bottom:8px;">How this session works</div>
+    <div style="font-size:13px;font-weight:500;color:var(--text-secondary);margin-bottom:8px;">How this session works</div>
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">
       {% set phases = archetype_data.phases %}
       <div style="border:1px solid var(--border);border-radius:8px;padding:10px 12px;background:var(--bg-surface);">
-        <div style="font-size:10px;font-weight:600;color:var(--text-orange);margin-bottom:4px;">PHASE 1 &middot; EXCHANGES 1–{{ assignment.phase_1_end }}</div>
-        <div style="font-size:11px;color:var(--text-secondary);line-height:1.55;">{{ phases[0] if phases|length > 0 else '' }}</div>
+        <div style="font-size:12px;font-weight:600;color:var(--text-orange);margin-bottom:4px;">PHASE 1 &middot; EXCHANGES 1–{{ assignment.phase_1_end }}</div>
+        <div style="font-size:14px;color:var(--text-secondary);line-height:1.55;">{{ phases[0] if phases|length > 0 else '' }}</div>
       </div>
       <div style="border:1px solid var(--border);border-radius:8px;padding:10px 12px;background:var(--bg-surface);">
-        <div style="font-size:10px;font-weight:600;color:var(--text-orange);margin-bottom:4px;">PHASE 2 &middot; EXCHANGES {{ assignment.phase_1_end + 1 }}–{{ assignment.phase_2_end }}</div>
-        <div style="font-size:11px;color:var(--text-secondary);line-height:1.55;">{{ phases[1] if phases|length > 1 else '' }}</div>
+        <div style="font-size:12px;font-weight:600;color:var(--text-orange);margin-bottom:4px;">PHASE 2 &middot; EXCHANGES {{ assignment.phase_1_end + 1 }}–{{ assignment.phase_2_end }}</div>
+        <div style="font-size:14px;color:var(--text-secondary);line-height:1.55;">{{ phases[1] if phases|length > 1 else '' }}</div>
       </div>
       <div style="border:1px solid var(--border);border-radius:8px;padding:10px 12px;background:var(--bg-surface);">
-        <div style="font-size:10px;font-weight:600;color:var(--text-orange);margin-bottom:4px;">PHASE 3 &middot; EXCHANGES {{ assignment.phase_2_end + 1 }}+</div>
-        <div style="font-size:11px;color:var(--text-secondary);line-height:1.55;">{{ phases[2] if phases|length > 2 else '' }}</div>
+        <div style="font-size:12px;font-weight:600;color:var(--text-orange);margin-bottom:4px;">PHASE 3 &middot; EXCHANGES {{ assignment.phase_2_end + 1 }}+</div>
+        <div style="font-size:14px;color:var(--text-secondary);line-height:1.55;">{{ phases[2] if phases|length > 2 else '' }}</div>
       </div>
     </div>
   </div>
 
   {# Criteria cards #}
   <div>
-    <div style="font-size:11px;font-weight:500;color:var(--text-secondary);margin-bottom:6px;">How you will be assessed</div>
+    <div style="font-size:13px;font-weight:500;color:var(--text-secondary);margin-bottom:6px;">How you will be assessed</div>
     <div class="criteria-grid">
       {% for c in archetype_data.criteria %}
       <div class="criteria-card">
@@ -663,7 +669,7 @@
   }
 
   function levelDots(level) {
-    const filled = level === 'emerging' ? 1 : level === 'developing' ? 2 : 3;
+    const filled = (level === 'needs work' || level === 'emerging') ? 1 : level === 'developing' ? 2 : 3;
     let dots = '';
     for (let i = 0; i < 3; i++) {
       dots += `<div class="criteria-dot${i < filled ? ' filled' : ''}"></div>`;
@@ -671,10 +677,16 @@
     return `<div class="criteria-dots">${dots}</div>`;
   }
 
-  const LEVEL_LABELS = { emerging: 'Needs work', developing: 'Developing', integrated: 'Completed' };
+  const LEVEL_LABELS = {
+    'needs work': 'Needs work', emerging: 'Needs work',
+    developing: 'Developing',
+    completed: 'Completed', integrated: 'Completed',
+  };
 
   function levelBadge(level) {
-    const cls = level === 'integrated' ? 'level-badge-integrated' : level === 'developing' ? 'level-badge-developing' : 'level-badge-emerging';
+    const isCompleted = level === 'completed' || level === 'integrated';
+    const isEmerging  = level === 'needs work' || level === 'emerging';
+    const cls = isCompleted ? 'level-badge-integrated' : level === 'developing' ? 'level-badge-developing' : 'level-badge-emerging';
     return `<span class="criteria-level-badge ${cls}">${LEVEL_LABELS[level] || level}</span>`;
   }
 

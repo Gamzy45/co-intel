@@ -2,6 +2,7 @@ import json
 from datetime import datetime
 
 from flask import Blueprint, jsonify, redirect, render_template, request, session, url_for
+from flask_login import current_user
 from extensions import db
 from models.models import Assignment, Course, InstructorFeedback, Output, PromptExchange, Reflection, ReflectionConfig, SessionSummary, Student
 from services.ai_service import detect_concept_usage, get_ai_response, suggest_discussion_points
@@ -11,12 +12,32 @@ from config import MODALITY_SECTIONS, DEFAULT_REFLECTION_QUESTIONS
 student_bp = Blueprint("student", __name__, url_prefix="/student")
 
 
+@student_bp.before_request
+def require_student_access():
+    if not current_user.is_authenticated:
+        return redirect(url_for("login"))
+    if current_user.role not in ("student", "instructor", "dev"):
+        return redirect(url_for("login"))
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 def _get_context():
-    """Return the demo student, assignment and course based on session course_id."""
+    """Return (student, assignment, course) for the current user."""
+    from flask_login import current_user
+
+    # Real student logged in via access code
+    if current_user.is_authenticated and current_user.role == "student":
+        student = Student.query.filter_by(user_id=current_user.id).first()
+        if student:
+            course = Course.query.get(student.course_id)
+            assignment = Assignment.query.filter_by(course_id=course.id).first()
+            session["course_id"] = course.id
+            return student, assignment, course
+
+    # Demo / instructor / dev fallback
     course_id = session.get("course_id")
     if course_id:
         course = Course.query.get(course_id)

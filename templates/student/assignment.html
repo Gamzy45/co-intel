@@ -118,6 +118,9 @@
 
 <!-- Writing workspace -->
 <div class="card">
+  {% if assignment.modality %}
+  <div style="display:inline-block;font-size:11px;color:var(--text-secondary);background:var(--bg-surface);border:1px solid var(--border);border-radius:20px;padding:2px 10px;margin-bottom:10px;">{{ assignment.modality | title }}</div>
+  {% endif %}
   <div style="font-size:11px;color:var(--text-tertiary);margin-bottom:12px;font-style:italic;">
     This is your analysis. Use your conversation with AI as a thinking partner, but every word here should be yours.
   </div>

@@ -79,37 +79,40 @@
 
 <!-- TAB 1: Prompting -->
 <div class="tab-panel active" id="tab-prompting">
-  <div class="metric-grid-3">
-    <div class="metric-card">
-      <div class="metric-label">Concept score</div>
-      <div class="metric-val">{{ score.concept_score if score.concept_score is not none else '—' }}</div>
-      <div class="metric-sub">out of 100</div>
-    </div>
-    <div class="metric-card">
-      <div class="metric-label">Dialogic depth</div>
-      <div class="metric-val">{{ score.depth_score if score.depth_score is not none else '—' }}</div>
-      <div class="metric-sub">out of 100</div>
-    </div>
-    <div class="metric-card">
-      <div class="metric-label">Pushback quality</div>
-      <div class="metric-val">{{ score.pushback_score if score.pushback_score is not none else '—' }}</div>
-      <div class="metric-sub">out of 100</div>
-    </div>
+  <div style="display:flex;justify-content:flex-end;margin-bottom:10px;">
+    <button class="btn" id="regen-btn" onclick="regenerateSummary()">Regenerate assessment</button>
   </div>
+  {% if session_summary and session_summary.criteria_scores %}
   <div class="card">
+    {% for cs in session_summary.criteria_scores %}
+    {% set score_val = cs.get('score', 0) %}
     <div class="ring-wrap">
-      <div class="score-ring" style="--pct:{{ score.concept_score or 0 }};"><span class="score-ring-val">{{ score.concept_score or '—' }}</span></div>
-      <div><div class="ring-label">Concept breadth and accuracy</div><div class="ring-feedback">{{ score.concept_feedback or 'No feedback available.' }}</div></div>
+      <div class="score-ring" style="--pct:{{ score_val }};"><span class="score-ring-val">{{ score_val }}</span></div>
+      <div>
+        <div class="ring-label">{{ cs.criterion_name }}</div>
+        <div style="margin-bottom:4px;">
+          {% if cs.level == 'completed' %}
+          <span style="display:inline-block;font-size:10px;font-weight:500;padding:2px 8px;border-radius:20px;background:var(--bg-orange-light);color:var(--text-orange);">Completed</span>
+          {% elif cs.level == 'developing' %}
+          <span style="display:inline-block;font-size:10px;font-weight:500;padding:2px 8px;border-radius:20px;background:#FEF3E2;color:#92580a;">Developing</span>
+          {% else %}
+          <span style="display:inline-block;font-size:10px;font-weight:500;padding:2px 8px;border-radius:20px;background:var(--bg-surface);color:var(--text-tertiary);">Needs work</span>
+          {% endif %}
+        </div>
+        <div class="ring-feedback">{{ cs.evidence or '' }}</div>
+      </div>
     </div>
-    <div class="ring-wrap">
-      <div class="score-ring" style="--pct:{{ score.depth_score or 0 }};"><span class="score-ring-val">{{ score.depth_score or '—' }}</span></div>
-      <div><div class="ring-label">Analytical depth across exchanges</div><div class="ring-feedback">{{ score.depth_feedback or 'No feedback available.' }}</div></div>
-    </div>
-    <div class="ring-wrap">
-      <div class="score-ring" style="--pct:{{ score.pushback_score or 0 }};"><span class="score-ring-val">{{ score.pushback_score or '—' }}</span></div>
-      <div><div class="ring-label">Critical engagement and pushback</div><div class="ring-feedback">{{ score.pushback_feedback or 'No feedback available.' }}</div></div>
-    </div>
+    {% endfor %}
   </div>
+  {% elif session_summary %}
+  <div class="card" style="text-align:center;padding:40px 0;color:var(--text-tertiary);font-size:12px;">
+    No criteria scores found in the summary — click Regenerate assessment above to refresh.
+  </div>
+  {% else %}
+  <div class="card" style="text-align:center;padding:40px 0;color:var(--text-tertiary);font-size:12px;">
+    No session summary found — click Regenerate assessment above to generate one.
+  </div>
+  {% endif %}
 </div>
 
 <!-- TAB 2: Reflection -->
@@ -230,6 +233,30 @@
 </script>
 {% else %}
 <script>
+  async function regenerateSummary() {
+    const btn = document.getElementById('regen-btn');
+    const orig = btn.textContent;
+    btn.textContent = 'Regenerating…';
+    btn.disabled = true;
+    try {
+      const resp = await fetch(
+        '{{ url_for("instructor.regenerate_summary", student_id=student.id) }}',
+        { method: 'POST' }
+      );
+      const data = await resp.json();
+      if (data.success) {
+        location.reload();
+      } else {
+        btn.textContent = orig;
+        btn.disabled = false;
+        alert('Error: ' + (data.error || 'Regeneration failed.'));
+      }
+    } catch (err) {
+      btn.textContent = orig;
+      btn.disabled = false;
+    }
+  }
+
   function updateFeedbackCount() {
     const len = document.getElementById('feedback-text').value.length;
     document.getElementById('feedback-count').textContent = len + ' / 1000';

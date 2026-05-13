@@ -1,5 +1,18 @@
 from datetime import datetime
+from flask_login import UserMixin
 from extensions import db
+
+
+class User(db.Model, UserMixin):
+    __tablename__ = "users"
+
+    id = db.Column(db.Integer, primary_key=True)
+    role = db.Column(db.String(20), nullable=False, default="student")  # instructor | student | dev
+    display_name = db.Column(db.String(100), nullable=False)
+    is_dev = db.Column(db.Boolean, nullable=False, default=False)
+
+    def __repr__(self):
+        return f"<User {self.display_name} ({self.role})>"
 
 
 class Course(db.Model):
@@ -64,6 +77,7 @@ class Student(db.Model):
     name = db.Column(db.String(120), nullable=False)
     email = db.Column(db.String(200), unique=True, nullable=False)
     course_id = db.Column(db.Integer, db.ForeignKey("courses.id"), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
 
     course = db.relationship("Course", back_populates="students")
     exchanges = db.relationship("PromptExchange", back_populates="student")
@@ -73,6 +87,23 @@ class Student(db.Model):
 
     def __repr__(self):
         return f"<Student {self.name}>"
+
+
+class AccessCode(db.Model):
+    __tablename__ = "access_codes"
+
+    id = db.Column(db.Integer, primary_key=True)
+    code = db.Column(db.String(10), unique=True, nullable=False)
+    is_claimed = db.Column(db.Boolean, nullable=False, default=False)
+    student_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    course_id = db.Column(db.Integer, db.ForeignKey("courses.id"), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    claimed_user = db.relationship("User", foreign_keys=[student_id])
+    course = db.relationship("Course")
+
+    def __repr__(self):
+        return f"<AccessCode {self.code} claimed={self.is_claimed}>"
 
 
 class PromptExchange(db.Model):
@@ -194,7 +225,7 @@ class AssessmentScore(db.Model):
     concept_score = db.Column(db.Integer, nullable=True)
     depth_score = db.Column(db.Integer, nullable=True)
     pushback_score = db.Column(db.Integer, nullable=True)
-    reflection_score = db.Column(db.Integer, nullable=True)   # average of q1/q2/q3
+    reflection_score = db.Column(db.Integer, nullable=True)
     reflection_q1_score = db.Column(db.Integer, nullable=True)
     reflection_q2_score = db.Column(db.Integer, nullable=True)
     reflection_q3_score = db.Column(db.Integer, nullable=True)

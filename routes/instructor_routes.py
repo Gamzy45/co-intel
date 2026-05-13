@@ -1,15 +1,27 @@
 from datetime import datetime
 
 from flask import Blueprint, jsonify, render_template, redirect, request, session, url_for
+from flask_login import current_user
 from extensions import db
+import json
+
 from models.models import (
     Assignment, AssessmentScore, Course, InstructorFeedback, Output,
-    PromptExchange, Reflection, ReflectionConfig, Student,
+    PromptExchange, Reflection, ReflectionConfig, SessionSummary, Student,
 )
 from services.ai_service import score_engagement, analyze_assignment_authorship
+from services.archetype_service import generate_session_summary
 from config import MODALITY_SECTIONS, DEFAULT_REFLECTION_QUESTIONS
 
 instructor_bp = Blueprint("instructor", __name__, url_prefix="/instructor")
+
+
+@instructor_bp.before_request
+def require_instructor_role():
+    if not current_user.is_authenticated:
+        return redirect(url_for("login"))
+    if current_user.role not in ("instructor", "dev"):
+        return redirect(url_for("student.prompting"))
 
 
 # ---------------------------------------------------------------------------
@@ -139,6 +151,9 @@ def save_brief(assignment_id):
     assignment = Assignment.query.get_or_404(assignment_id)
     data = request.get_json(silent=True) or {}
     assignment.instructions = data.get("instructions", "").strip()
+    modality = data.get("modality", "").strip()
+    if modality:
+        assignment.modality = modality
     db.session.commit()
     return jsonify({"success": True, "message": "Assignment brief saved"})
 
@@ -348,9 +363,33 @@ def assessment(student_id):
     student = Student.query.get_or_404(student_id)
     course, assignment = _get_base_for_student(student)
 
+    print(f"[assessment] student_id={student_id} assignment_id={assignment.id}")
+
     score_rec = AssessmentScore.query.filter_by(
         student_id=student_id, assignment_id=assignment.id
     ).first()
+    summary_rec = SessionSummary.query.filter_by(
+        student_id=student_id, assignment_id=assignment.id
+    ).first()
+
+    print(f"[assessment] score_rec found: {score_rec is not None}")
+    print(f"[assessment] summary_rec found: {summary_rec is not None}")
+    if summary_rec:
+        print(f"[assessment] summary_json (first 200): {(summary_rec.summary_json or '')[:200]}")
+
+    # Generate session summary synchronously if missing so the tab renders immediately
+    if summary_rec is None:
+        print(f"[assessment] no summary found — generating synchronously")
+        try:
+            generate_session_summary(student_id, assignment.id)
+            summary_rec = SessionSummary.query.filter_by(
+                student_id=student_id, assignment_id=assignment.id
+            ).first()
+            print(f"[assessment] generation complete, record found: {summary_rec is not None}")
+        except Exception as exc:
+            print(f"[assessment] session summary generation error: {exc}")
+
+    session_summary = json.loads(summary_rec.summary_json) if summary_rec else None
     feedback = InstructorFeedback.query.filter_by(
         student_id=student_id, assignment_id=assignment.id
     ).first()
@@ -361,6 +400,7 @@ def assessment(student_id):
         assignment=assignment,
         student=student,
         score=score_rec,
+        session_summary=session_summary,
         generating=(score_rec is None),
         feedback=feedback,
     )
@@ -371,10 +411,10 @@ def assessment_generate(student_id):
     student = Student.query.get_or_404(student_id)
     course, assignment = _get_base_for_student(student)
 
-    existing = AssessmentScore.query.filter_by(
+    existing_score = AssessmentScore.query.filter_by(
         student_id=student_id, assignment_id=assignment.id
     ).first()
-    if existing:
+    if existing_score:
         return jsonify({"success": True})
 
     exchanges = (
@@ -441,6 +481,25 @@ def assessment_generate(student_id):
     return jsonify({"success": True})
 
 
+@instructor_bp.route("/student/<int:student_id>/assessment/regenerate-summary", methods=["POST"])
+def regenerate_summary(student_id):
+    student = Student.query.get_or_404(student_id)
+    _, assignment = _get_base_for_student(student)
+
+    existing = SessionSummary.query.filter_by(
+        student_id=student_id, assignment_id=assignment.id
+    ).first()
+    if existing:
+        db.session.delete(existing)
+        db.session.commit()
+
+    try:
+        generate_session_summary(student_id, assignment.id)
+        return jsonify({"success": True})
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 502
+
+
 @instructor_bp.route("/student/<int:student_id>/assessment/feedback", methods=["POST"])
 def assessment_feedback(student_id):
     student = Student.query.get_or_404(student_id)
@@ -501,3 +560,54 @@ def reflection_config():
         ))
     db.session.commit()
     return jsonify({"success": True})
+
+
+# ---------------------------------------------------------------------------
+# Access codes
+# ---------------------------------------------------------------------------
+
+@instructor_bp.route("/access-codes")
+def access_codes():
+    from models.models import AccessCode
+    course, _ = _get_base()
+    codes = (
+        AccessCode.query
+        .filter_by(course_id=course.id)
+        .order_by(AccessCode.created_at.desc())
+        .all()
+    )
+    claimed = sum(1 for c in codes if c.is_claimed)
+    unclaimed = len(codes) - claimed
+    return render_template(
+        "instructor/access_codes.html",
+        course=course,
+        codes=codes,
+        claimed=claimed,
+        unclaimed=unclaimed,
+    )
+
+
+@instructor_bp.route("/access-codes/generate", methods=["POST"])
+def access_codes_generate():
+    import random as _random
+    from models.models import AccessCode
+    course, _ = _get_base()
+    data = request.get_json(silent=True) or {}
+    try:
+        count = max(1, min(50, int(data.get("count", 1))))
+    except (TypeError, ValueError):
+        count = 1
+
+    existing = {ac.code for ac in AccessCode.query.with_entities(AccessCode.code).all()}
+    generated = []
+    attempts = 0
+    while len(generated) < count and attempts < 1000:
+        attempts += 1
+        code = f"{_random.randint(0, 999999):06d}"
+        if code not in existing:
+            existing.add(code)
+            generated.append(AccessCode(code=code, course_id=course.id))
+
+    db.session.add_all(generated)
+    db.session.commit()
+    return jsonify({"success": True, "count": len(generated)})

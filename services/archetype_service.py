@@ -445,44 +445,34 @@ def generate_session_summary(student_id: int, assignment_id: int) -> dict:
         for ex in exchanges
     )
 
-    criteria_text = "\n\n".join(
+    criteria_defs = "\n\n".join(
         f"Criterion: {c['criterion_name']}\n"
         f"Description: {c['criterion_description']}\n"
-        f"Emerging: {c['level_emerging']}\n"
+        f"Needs work: {c['level_emerging']}\n"
         f"Developing: {c['level_developing']}\n"
-        f"Integrated: {c['level_integrated']}"
+        f"Completed: {c['level_integrated']}"
         for c in criteria
     )
 
-    if assignment.concepts_required and (assignment.required_concepts or []) + (assignment.course.required_concepts or []):
-        all_concepts = assignment.required_concepts or assignment.course.required_concepts or []
-        concept_instruction = (
-            f"Look for these specific course concepts: {', '.join(all_concepts)}. "
-            f"Also detect any other course-related concepts the student applied."
-        )
-    else:
-        concept_instruction = (
-            "Evaluate this conversation based only on what the student actually wrote in their messages. "
-            "Do not reference any concepts that do not appear in this conversation. "
-            "Do not compare the conversation against a list of expected concepts. "
-            "Identify the concepts the student applied independently and assess the quality of that application."
-        )
-
     scoring_prompt = (
-        f"Analyze this conversation and return only valid JSON with no other text, no markdown, no code blocks.\n\n"
+        f"You are evaluating a student conversation. "
+        f"The assignment uses the archetype called {archetype['name']}.\n\n"
+        f"Evaluate the conversation against only these four criteria and nothing else:\n\n"
+        f"{criteria_defs}\n\n"
+        f"Do not reference any concepts that do not appear in this specific conversation. "
+        f"Do not mention any concept unless the student actually used it in their own messages. "
+        f"Base all feedback entirely on what this specific student wrote in this specific conversation.\n\n"
+        f"=== Conversation Transcript ===\n{transcript}\n\n"
         f"IMPORTANT: Write all evidence sentences in second person, addressing the student directly as 'you'. "
         f"For example: 'You introduced an original idea that was not prompted by the AI.' "
         f"Never write 'the student' or 'student' in any evidence or description field.\n\n"
-        f"=== Conversation Transcript ===\n{transcript}\n\n"
-        f"=== Criteria Definitions ===\n{criteria_text}\n\n"
-        f"Concept detection: {concept_instruction}\n\n"
-        f"Return JSON with exactly these fields:\n"
+        f"Return only valid JSON with no other text. The JSON must have exactly these fields:\n"
         f"- exchange_count: integer\n"
         f"- phase_reached: integer 1 through 3\n"
         f"- pushback_count: integer\n"
         f"- student_idea_percentage: integer 0 through 100\n"
         f"- concept_scores: array of objects each with concept_name, introduced_by (\"student\" or \"ai\"), depth_score (0-100), times_used\n"
-        f"- criteria_scores: array of {len(criteria)} objects each with criterion_name, level (\"emerging\", \"developing\", or \"integrated\"), evidence (one sentence in second person addressing the student as you)\n"
+        f"- criteria_scores: array of {len(criteria)} objects each with criterion_name, level (\"needs work\", \"developing\", or \"completed\"), score (0-100), evidence (one sentence in second person addressing the student as you)\n"
         f"- key_moments: array of exactly 3 objects each with type (\"strongest\", \"pushback\", or \"gap\"), exchange_number, description (one sentence in second person)\n"
         f"- threads: array of exactly 3 objects each with text (one sentence), source (e.g. \"exchange 3\")\n\n"
         f"Criterion names must match exactly: {', '.join(c['criterion_name'] for c in criteria)}"
