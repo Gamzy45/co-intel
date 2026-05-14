@@ -48,15 +48,13 @@ class Assignment(db.Model):
     instructions = db.Column(db.Text, nullable=True)
     sections_config = db.Column(db.JSON, nullable=True)
 
-    # Archetype system fields
+    # Phase progression system fields
     concepts_required = db.Column(db.Boolean, nullable=False, default=False)
     required_concepts = db.Column(db.JSON, nullable=False, default=list)
-    archetype = db.Column(db.String(50), nullable=False, default="challenger")
-    contribution_level = db.Column(db.String(50), nullable=False, default="thinking_partner")
+    intensity = db.Column(db.String(50), nullable=False, default="balanced")
     phase_1_end = db.Column(db.Integer, nullable=False, default=3)
     phase_2_end = db.Column(db.Integer, nullable=False, default=6)
-    sidebar_mode = db.Column(db.String(50), nullable=False, default="prescriptive")
-    behavioral_emphasis = db.Column(db.String(50), nullable=False, default="balanced")
+    phase_3_end = db.Column(db.Integer, nullable=False, default=9)
     supplementary_instructions = db.Column(db.Text, nullable=False, default="")
     max_score = db.Column(db.Float, nullable=False, default=100)
 

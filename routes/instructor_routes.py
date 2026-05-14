@@ -197,9 +197,10 @@ def save_brief(assignment_id):
 def save_ai_config(assignment_id):
     assignment = Assignment.query.get_or_404(assignment_id)
     data = request.get_json(silent=True) or {}
-    assignment.archetype = data.get("archetype", "challenger")
-    assignment.contribution_level = data.get("contribution_level", "thinking_partner")
-    assignment.behavioral_emphasis = data.get("behavioral_emphasis", "balanced")
+    intensity = data.get("intensity", "balanced")
+    if intensity not in ("supportive", "balanced", "demanding"):
+        intensity = "balanced"
+    assignment.intensity = intensity
     try:
         assignment.phase_1_end = int(data.get("phase_1_end", 3))
     except (TypeError, ValueError):
@@ -208,6 +209,7 @@ def save_ai_config(assignment_id):
         assignment.phase_2_end = int(data.get("phase_2_end", 6))
     except (TypeError, ValueError):
         assignment.phase_2_end = 6
+    assignment.phase_3_end = assignment.phase_2_end + 3
     assignment.supplementary_instructions = data.get("supplementary_instructions", "").strip()
     db.session.commit()
     return jsonify({"success": True, "message": "AI configuration saved"})
@@ -229,9 +231,10 @@ def assignment_config():
     if sections_config is not None:
         assignment.sections_config = sections_config
 
-    # Archetype fields
-    assignment.archetype = data.get("archetype", "challenger")
-    assignment.contribution_level = data.get("contribution_level", "thinking_partner")
+    intensity = data.get("intensity", "balanced")
+    if intensity not in ("supportive", "balanced", "demanding"):
+        intensity = "balanced"
+    assignment.intensity = intensity
     try:
         assignment.phase_1_end = int(data.get("phase_1_end", 3))
     except (TypeError, ValueError):
@@ -240,8 +243,7 @@ def assignment_config():
         assignment.phase_2_end = int(data.get("phase_2_end", 6))
     except (TypeError, ValueError):
         assignment.phase_2_end = 6
-    assignment.sidebar_mode = data.get("sidebar_mode", "prescriptive")
-    assignment.behavioral_emphasis = data.get("behavioral_emphasis", "balanced")
+    assignment.phase_3_end = assignment.phase_2_end + 3
     assignment.supplementary_instructions = data.get("supplementary_instructions", "").strip()
 
     db.session.commit()

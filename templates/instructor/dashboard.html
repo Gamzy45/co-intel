@@ -43,17 +43,6 @@
     font-size:12px; font-weight:500; color:var(--text-secondary); margin-bottom:14px;
   }
 
-  /* Archetype cards */
-  .archetype-card {
-    border:1px solid var(--border); border-radius:10px; padding:12px 14px;
-    background:var(--bg-surface); cursor:pointer; transition:border-color .15s, background .15s;
-  }
-  .archetype-card:hover { background:var(--bg-primary); }
-  .archetype-card.selected { border-color:var(--accent); background:var(--bg-orange-light); }
-  .archetype-card-name { font-size:12px; font-weight:500; color:var(--text-primary); margin-bottom:4px; }
-  .archetype-card.selected .archetype-card-name { color:var(--text-orange); }
-  .archetype-card-desc { font-size:11px; color:var(--text-secondary); line-height:1.55; }
-
   .segmented-ctrl {
     display:inline-flex; background:var(--bg-surface);
     border:1px solid var(--border); border-radius:8px; padding:2px; width:100%;
@@ -159,80 +148,43 @@
   <hr class="section-divider" />
 
   <!-- Section 2: AI configuration -->
-  <div class="section-heading">
-    AI configuration
-    {% set archetype_names = {
-      'challenger':     'The Challenger',
-      'prober':         'The Prober',
-      'design_thinker': 'The Design Thinker',
-      'narrative_coach':'The Narrative Coach',
-    } %}
-    <span id="active-archetype-pill" class="pill pill-orange" style="font-size:10px;">
-      Currently: {{ archetype_names.get(assignment.archetype or 'challenger', 'The Challenger') }}
-    </span>
-  </div>
+  <div class="section-heading">AI configuration</div>
 
-  <!-- Archetype selector -->
+  <!-- AI intensity selector -->
   <div class="cfg-field">
-    <label class="cfg-label">AI archetype</label>
-    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;" id="archetype-grid">
-      {% set archetypes = [
-        ('challenger',     'The Challenger',      'Takes opposing positions and offers arguments with deliberate weaknesses for you to find and refute.'),
-        ('prober',         'The Prober',          'Draws out your thinking through questioning only — never contributes content or takes positions.'),
-        ('design_thinker', 'The Design Thinker',  'Generative and expansive in early phases, convergent and decision-focused in later phases.'),
-        ('narrative_coach','The Narrative Coach',  'Focuses on voice, structure, and editorial choices — never evaluates arguments logically.'),
-      ] %}
-      {% for val, name, desc in archetypes %}
-      <div class="archetype-card{% if assignment.archetype == val or (not assignment.archetype and val == 'challenger') %} selected{% endif %}"
-           data-archetype="{{ val }}" data-name="{{ name }}" onclick="selectArchetype('{{ val }}', '{{ name }}')">
-        <div class="archetype-card-name">{{ name }}</div>
-        <div class="archetype-card-desc">{{ desc }}</div>
-      </div>
+    <label class="cfg-label">AI intensity</label>
+    <div class="segmented-ctrl" id="intensity-ctrl">
+      {% for val, label in [('supportive', 'Supportive'), ('balanced', 'Balanced'), ('demanding', 'Demanding')] %}
+      <button class="seg-btn{% if assignment.intensity == val or (not assignment.intensity and val == 'balanced') %} active{% endif %}"
+              data-value="{{ val }}" onclick="selectIntensity('{{ val }}')">{{ label }}</button>
       {% endfor %}
     </div>
-  </div>
-
-  <!-- Contribution level -->
-  <div class="cfg-field">
-    <label class="cfg-label">AI contribution level</label>
-    <div class="segmented-ctrl" id="contrib-ctrl">
-      {% for val, label, desc in [
-        ('guide_only',       'Guide only',       'AI asks questions only — no content or positions'),
-        ('thinking_partner', 'Thinking partner', 'AI contributes arguments for the student to evaluate'),
-        ('collaborator',     'Collaborator',     'AI contributes generously — student evaluates and builds'),
-      ] %}
-      <button class="seg-btn{% if assignment.contribution_level == val or (not assignment.contribution_level and val == 'thinking_partner') %} active{% endif %}"
-              data-value="{{ val }}" onclick="selectContrib('{{ val }}')" title="{{ desc }}">{{ label }}</button>
-      {% endfor %}
-    </div>
-  </div>
-
-  <!-- Behavioral emphasis -->
-  <div class="cfg-field">
-    <label class="cfg-label">Behavioral emphasis</label>
-    <div class="segmented-ctrl" id="emphasis-ctrl">
-      {% for val, label, desc in [
-        ('supportive', 'Supportive', 'Gentler and more encouraging within the archetype role'),
-        ('balanced',   'Balanced',   'The default — persistent but respectful'),
-        ('demanding',  'Demanding',  'Uncompromising — pushes hard on every weakness'),
-      ] %}
-      <button class="seg-btn{% if assignment.behavioral_emphasis == val or (not assignment.behavioral_emphasis and val == 'balanced') %} active{% endif %}"
-              data-value="{{ val }}" onclick="selectEmphasis('{{ val }}')" title="{{ desc }}">{{ label }}</button>
-      {% endfor %}
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-top:5px;">
+      <div style="font-size:10px;color:var(--text-tertiary);text-align:center;line-height:1.4;">Encouraging and patient, builds on student thinking gently.</div>
+      <div style="font-size:10px;color:var(--text-tertiary);text-align:center;line-height:1.4;">Direct and persistent, the default for most assignments.</div>
+      <div style="font-size:10px;color:var(--text-tertiary);text-align:center;line-height:1.4;">Rigorous and uncompromising, challenges every weak claim.</div>
     </div>
   </div>
 
   <!-- Phase transitions -->
-  <div class="cfg-field" style="display:flex;gap:12px;">
-    <div style="flex:1;">
-      <label class="cfg-label">Phase 1 ends after exchange</label>
-      <input type="number" id="cfg-phase1" class="cfg-input" min="1" max="20"
-             value="{{ assignment.phase_1_end or 3 }}" />
+  <div class="cfg-field">
+    <div style="display:flex;gap:12px;margin-bottom:8px;">
+      <div style="flex:1;">
+        <label class="cfg-label">Phase 1 inquire ends after exchange</label>
+        <input type="number" id="cfg-phase1" class="cfg-input" min="1" max="20"
+               value="{{ assignment.phase_1_end or 3 }}" />
+        <div style="font-size:10px;color:var(--text-tertiary);margin-top:3px;line-height:1.4;">Inquire: AI draws out your thinking and stress-tests it.</div>
+      </div>
+      <div style="flex:1;">
+        <label class="cfg-label">Phase 2 collaborate ends after exchange</label>
+        <input type="number" id="cfg-phase2" class="cfg-input" min="1" max="20"
+               value="{{ assignment.phase_2_end or 6 }}" />
+        <div style="font-size:10px;color:var(--text-tertiary);margin-top:3px;line-height:1.4;">Collaborate: AI builds alongside you while you make the decisions.</div>
+      </div>
     </div>
     <div style="flex:1;">
-      <label class="cfg-label">Phase 2 ends after exchange</label>
-      <input type="number" id="cfg-phase2" class="cfg-input" min="1" max="20"
-             value="{{ assignment.phase_2_end or 6 }}" />
+      <label class="cfg-label">Phase 3 evaluate continues until submission</label>
+      <div class="cfg-input" style="background:var(--bg-surface);color:var(--text-tertiary);cursor:default;">Evaluate: AI gives specific constructive feedback on what you developed.</div>
     </div>
   </div>
 
@@ -319,27 +271,11 @@
   const SAVE_BRIEF_URL   = '{{ url_for("instructor.save_brief",    assignment_id=assignment.id) }}';
   const SAVE_AI_URL      = '{{ url_for("instructor.save_ai_config", assignment_id=assignment.id) }}';
 
-  let selectedArchetype = document.querySelector('.archetype-card.selected')?.dataset.archetype || 'challenger';
-  let selectedContrib   = document.querySelector('#contrib-ctrl .seg-btn.active')?.dataset.value || 'thinking_partner';
-  let selectedEmphasis  = document.querySelector('#emphasis-ctrl .seg-btn.active')?.dataset.value || 'balanced';
+  let selectedIntensity = document.querySelector('#intensity-ctrl .seg-btn.active')?.dataset.value || 'balanced';
 
-  function selectArchetype(val, name) {
-    selectedArchetype = val;
-    document.querySelectorAll('.archetype-card').forEach(c => {
-      c.classList.toggle('selected', c.dataset.archetype === val);
-    });
-  }
-
-  function selectContrib(val) {
-    selectedContrib = val;
-    document.querySelectorAll('#contrib-ctrl .seg-btn').forEach(b => {
-      b.classList.toggle('active', b.dataset.value === val);
-    });
-  }
-
-  function selectEmphasis(val) {
-    selectedEmphasis = val;
-    document.querySelectorAll('#emphasis-ctrl .seg-btn').forEach(b => {
+  function selectIntensity(val) {
+    selectedIntensity = val;
+    document.querySelectorAll('#intensity-ctrl .seg-btn').forEach(b => {
       b.classList.toggle('active', b.dataset.value === val);
     });
   }
@@ -380,17 +316,15 @@
   }
 
   async function saveAiConfig() {
-    const phase_1_end       = parseInt(document.getElementById('cfg-phase1').value, 10) || 3;
-    const phase_2_end       = parseInt(document.getElementById('cfg-phase2').value, 10) || 6;
-    const supplementary     = document.getElementById('cfg-supplementary').value.trim();
+    const phase_1_end   = parseInt(document.getElementById('cfg-phase1').value, 10) || 3;
+    const phase_2_end   = parseInt(document.getElementById('cfg-phase2').value, 10) || 6;
+    const supplementary = document.getElementById('cfg-supplementary').value.trim();
     try {
       const resp = await fetch(SAVE_AI_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
         body: JSON.stringify({
-          archetype:                 selectedArchetype,
-          contribution_level:        selectedContrib,
-          behavioral_emphasis:       selectedEmphasis,
+          intensity: selectedIntensity,
           phase_1_end,
           phase_2_end,
           supplementary_instructions: supplementary,
@@ -399,15 +333,6 @@
       const data = await resp.json();
       if (!resp.ok) throw new Error(data.error || 'Save failed');
       showStatus('ai-status', 'ai-error', '', false);
-      // Update the active archetype pill
-      const nameMap = {
-        challenger:     'The Challenger',
-        prober:         'The Prober',
-        design_thinker: 'The Design Thinker',
-        narrative_coach:'The Narrative Coach',
-      };
-      const pill = document.getElementById('active-archetype-pill');
-      if (pill) pill.textContent = `Currently: ${nameMap[selectedArchetype] || selectedArchetype}`;
     } catch (err) {
       showStatus('ai-status', 'ai-error', err.message, true);
     }

@@ -311,25 +311,29 @@ def _migrate():
     from sqlalchemy import text
 
     new_cols = [
-        ("assignments", "concepts_required", "BOOLEAN NOT NULL DEFAULT 0"),
-        ("assignments", "required_concepts",  "TEXT NOT NULL DEFAULT '[]'"),
-        ("assignments", "archetype",           "VARCHAR(50) NOT NULL DEFAULT 'challenger'"),
-        ("assignments", "contribution_level",  "VARCHAR(50) NOT NULL DEFAULT 'thinking_partner'"),
-        ("assignments", "phase_1_end",         "INTEGER NOT NULL DEFAULT 3"),
-        ("assignments", "phase_2_end",         "INTEGER NOT NULL DEFAULT 6"),
-        ("assignments", "sidebar_mode",        "VARCHAR(50) NOT NULL DEFAULT 'prescriptive'"),
-        ("assignments", "behavioral_emphasis", "VARCHAR(50) NOT NULL DEFAULT 'balanced'"),
-        ("assignments", "supplementary_instructions", "TEXT NOT NULL DEFAULT ''"),
-        ("assignments", "max_score",           "FLOAT NOT NULL DEFAULT 100"),
-        ("students",    "user_id",             "INTEGER REFERENCES users(id)"),
-        ("outputs",     "is_submitted",        "BOOLEAN NOT NULL DEFAULT 0"),
-        ("outputs",     "is_reopened",         "BOOLEAN NOT NULL DEFAULT 0"),
-        ("outputs",     "reopened_at",         "DATETIME"),
-        ("outputs",     "resubmitted_at",      "DATETIME"),
-        ("reflections", "is_submitted",        "BOOLEAN NOT NULL DEFAULT 0"),
-        ("reflections", "is_reopened",         "BOOLEAN NOT NULL DEFAULT 0"),
-        ("reflections", "reopened_at",         "DATETIME"),
-        ("reflections", "resubmitted_at",      "DATETIME"),
+        ("assignments", "concepts_required",        "BOOLEAN NOT NULL DEFAULT 0"),
+        ("assignments", "required_concepts",         "TEXT NOT NULL DEFAULT '[]'"),
+        ("assignments", "phase_1_end",               "INTEGER NOT NULL DEFAULT 3"),
+        ("assignments", "phase_2_end",               "INTEGER NOT NULL DEFAULT 6"),
+        ("assignments", "supplementary_instructions","TEXT NOT NULL DEFAULT ''"),
+        ("assignments", "max_score",                 "FLOAT NOT NULL DEFAULT 100"),
+        # Legacy columns kept in DB for safety — not used by new model
+        ("assignments", "archetype",                 "VARCHAR(50) NOT NULL DEFAULT 'challenger'"),
+        ("assignments", "contribution_level",        "VARCHAR(50) NOT NULL DEFAULT 'thinking_partner'"),
+        ("assignments", "sidebar_mode",              "VARCHAR(50) NOT NULL DEFAULT 'prescriptive'"),
+        ("assignments", "behavioral_emphasis",       "VARCHAR(50) NOT NULL DEFAULT 'balanced'"),
+        # New phase-system columns
+        ("assignments", "intensity",                 "VARCHAR(50) NOT NULL DEFAULT 'balanced'"),
+        ("assignments", "phase_3_end",               "INTEGER NOT NULL DEFAULT 9"),
+        ("students",    "user_id",                   "INTEGER REFERENCES users(id)"),
+        ("outputs",     "is_submitted",              "BOOLEAN NOT NULL DEFAULT 0"),
+        ("outputs",     "is_reopened",               "BOOLEAN NOT NULL DEFAULT 0"),
+        ("outputs",     "reopened_at",               "DATETIME"),
+        ("outputs",     "resubmitted_at",            "DATETIME"),
+        ("reflections", "is_submitted",              "BOOLEAN NOT NULL DEFAULT 0"),
+        ("reflections", "is_reopened",               "BOOLEAN NOT NULL DEFAULT 0"),
+        ("reflections", "reopened_at",               "DATETIME"),
+        ("reflections", "resubmitted_at",            "DATETIME"),
     ]
     with db.engine.connect() as conn:
         for table, col, col_def in new_cols:
@@ -348,26 +352,65 @@ def _migrate():
         except Exception:
             pass
 
+        # Backfill intensity from behavioral_emphasis for existing rows
+        try:
+            conn.execute(text(
+                "UPDATE assignments SET intensity = behavioral_emphasis "
+                "WHERE (intensity IS NULL OR intensity = '') AND behavioral_emphasis IS NOT NULL AND behavioral_emphasis != ''"
+            ))
+            conn.commit()
+        except Exception:
+            pass
+
+        # Ensure intensity is always a valid value
+        try:
+            conn.execute(text(
+                "UPDATE assignments SET intensity = 'balanced' "
+                "WHERE intensity NOT IN ('supportive', 'balanced', 'demanding')"
+            ))
+            conn.commit()
+        except Exception:
+            pass
+
+        # Backfill phase_3_end from phase_2_end + 3 for existing rows
+        try:
+            conn.execute(text(
+                "UPDATE assignments SET phase_3_end = phase_2_end + 3 "
+                "WHERE phase_3_end IS NULL OR phase_3_end = 0"
+            ))
+            conn.commit()
+        except Exception:
+            pass
+
+        # Ensure phase_1_end and phase_2_end have valid values
         backfills = [
-            ("assignments", "archetype",           "'challenger'"),
-            ("assignments", "contribution_level",  "'thinking_partner'"),
-            ("assignments", "phase_1_end",         "3"),
-            ("assignments", "phase_2_end",         "6"),
-            ("assignments", "sidebar_mode",        "'prescriptive'"),
-            ("assignments", "behavioral_emphasis", "'balanced'"),
+            ("assignments", "phase_1_end", "3"),
+            ("assignments", "phase_2_end", "6"),
         ]
         for table, col, default in backfills:
             try:
-                conn.execute(text(f"UPDATE {table} SET {col} = {default} WHERE {col} IS NULL OR {col} = ''"))
+                conn.execute(text(f"UPDATE {table} SET {col} = {default} WHERE {col} IS NULL OR {col} = 0"))
                 conn.commit()
             except Exception:
                 pass
 
+        # Set canonical intensity values per assignment title (Step 10)
         try:
             conn.execute(text(
-                "DELETE FROM session_summaries "
-                "WHERE summary_json LIKE '%\"emerging\"%' OR summary_json LIKE '%\"integrated\"%'"
+                "UPDATE assignments SET intensity = 'balanced', phase_1_end = 3, phase_2_end = 6, phase_3_end = 9 "
+                "WHERE title = 'Deep Dive with AI'"
             ))
+            conn.execute(text(
+                "UPDATE assignments SET intensity = 'supportive', phase_1_end = 3, phase_2_end = 6, phase_3_end = 9 "
+                "WHERE title = 'Human-AI Game Design'"
+            ))
+            conn.commit()
+        except Exception:
+            pass
+
+        # Delete all existing session summaries so they regenerate with new universal criteria
+        try:
+            conn.execute(text("DELETE FROM session_summaries"))
             conn.commit()
         except Exception:
             pass
@@ -420,8 +463,8 @@ def _seed():
         due_date=now + timedelta(days=14),
         modality="critical analysis", instructions="",
         concepts_required=False, required_concepts=[],
-        archetype="challenger", contribution_level="thinking_partner",
-        phase_1_end=3, phase_2_end=6, behavioral_emphasis="balanced",
+        intensity="balanced",
+        phase_1_end=3, phase_2_end=6, phase_3_end=9,
         supplementary_instructions="",
     )
     db.session.add(nms_assignment)
@@ -462,8 +505,8 @@ def _seed():
             "be prepared to present your game design to the class."
         ),
         concepts_required=False, required_concepts=[],
-        archetype="design_thinker", contribution_level="thinking_partner",
-        phase_1_end=3, phase_2_end=6, behavioral_emphasis="balanced",
+        intensity="supportive",
+        phase_1_end=3, phase_2_end=6, phase_3_end=9,
         supplementary_instructions="",
     )
     db.session.add(ic_assignment)
@@ -506,7 +549,7 @@ def _seed_access_codes():
 
 def _seed_demo_submissions():
     """Ensure Alex M. (NMS demo student) has realistic submitted data on first launch."""
-    from models.models import Course, Student, Assignment, Output, Reflection, Grade
+    from models.models import Course, Student, Assignment, Output, Reflection, Grade, PromptExchange
 
     nms = Course.query.filter_by(name="New Media Society").first()
     if not nms:
@@ -517,6 +560,98 @@ def _seed_demo_submissions():
         return
 
     now = datetime.utcnow()
+
+    # Demo exchanges — AI companions topic analyzed through media framing lens
+    demo_exchanges = [
+        # Inquire phase (exchanges 1–3)
+        (1,
+         "I want to analyze how media covers AI companion apps like Replika. My argument is that most coverage "
+         "uses a fear-based framing that sensationalizes addiction risks while ignoring genuine use cases like "
+         "mental health support for isolated people. I think agenda-setting theory explains why addiction "
+         "narratives dominate.",
+         "That's a specific claim. What evidence do you have that addiction framing actually dominates — and what "
+         "draws you to Replika specifically rather than other AI companion tools?",
+         False),
+        (2,
+         "Looking at Guardian and Wired coverage from 2023, addiction language appears in most articles I "
+         "reviewed — terms like 'parasocial obsession' and 'unhealthy attachment' even in pieces that start "
+         "sympathetically. Framing theory explains this as a schema journalists apply before they report. "
+         "Agenda-setting then determines which frame becomes the dominant public reference point.",
+         "I want to push back on the framing theory claim. Journalists applying a pre-existing schema is one "
+         "explanation. But the fear frame also generates more engagement — which is an audience behavior "
+         "explanation, not a journalistic one. Why does framing theory explain this better than a simple "
+         "incentive argument?",
+         True),
+        (3,
+         "Both factors operate together. Confirmation bias in audiences reinforces journalists' incentive to "
+         "use fear frames, which then shapes what audiences expect — it's a feedback loop. Agenda-setting "
+         "tracks what becomes salient and fear frames position AI companions as a policy crisis rather than "
+         "a social technology. That shift in what the story is about is exactly what agenda-setting predicts.",
+         "Fair — the multi-causal explanation is more defensible. One thing worth considering: is the fear "
+         "framing specific to AI companions or is it a broader pattern in how media covers emerging social "
+         "technologies? If it's general, your argument becomes a case study rather than a unique phenomenon. "
+         "Does that change your argument or strengthen it?",
+         False),
+        # Collaborate phase (exchanges 4–6)
+        (4,
+         "I think it strengthens it. I can show this reproduces a pattern visible with social media, video "
+         "games, and celebrity parasocial fandom — the through-line is moral panic theory combined with "
+         "agenda-setting. How would you structure an argument that connects all of these?",
+         "One structure: open with the pattern across technologies, then zoom into AI companions as the "
+         "sharpest current instance. Your core claim becomes that moral panic framing in tech coverage "
+         "follows an agenda-setting dynamic that prioritizes risk salience over social nuance. Use Replika "
+         "coverage as evidence throughout. Does that architecture match what you want to say?",
+         False),
+        (5,
+         "I want the AI-specific angle as the main focus, not just a case study. My claim is that AI companion "
+         "coverage is distinct because the relationship with the technology itself is what gets framed as "
+         "pathological — unlike video games where the harm is about time or violence. The intimacy dimension "
+         "makes it a different category of moral panic.",
+         "That is a stronger and more original claim. You could anchor it in framing theory by showing "
+         "journalists consistently apply interpersonal vocabulary — attachment, dependency, longing — and "
+         "then pathologize that vocabulary. The implicit frame is: intimacy with a machine is inherently "
+         "disordered. Two directions from here: do you want to challenge that frame or just analyze it?",
+         False),
+        (6,
+         "I want to challenge it. My argument is that the pathology frame reveals a cultural assumption that "
+         "legitimate intimacy can only occur between humans. That assumption goes unquestioned in the coverage. "
+         "Confirmation bias operates at the level of ideology, not just editorial preference. The agenda-setting "
+         "effect here is not just about what issues get coverage — it is about which relationships are legible "
+         "as valid.",
+         "That is genuinely original — you are moving from agenda-setting to a critique of what I would call "
+         "legitimacy framing. Ambitious for the scope but defensible. Make sure you can back the cultural "
+         "assumption claim with specific textual evidence from articles, not just assertion. Do you have "
+         "two or three concrete examples that show this assumption operating in the coverage?",
+         False),
+        # Evaluate phase (exchange 7)
+        (7,
+         "Yes — I found three pieces from 2023 where journalists describe Replika users as confusing AI for "
+         "real relationships or filling a void that human connection should fill. That language assumes a "
+         "clear hierarchy where AI intimacy is substitution, not a valid form on its own terms. I think I "
+         "have enough to write a strong analysis.",
+         "The strongest part is the legitimacy framing thesis — original and supported by your textual "
+         "evidence. The weakest element is the connection to agenda-setting theory: you are using it loosely "
+         "to mean what gets covered and how, but the classic theory is more specifically about salience, not "
+         "frame content. Either tighten that theoretical application or center your argument on framing theory "
+         "alone, which fits your actual analysis better. What would you revise?",
+         False),
+    ]
+
+    if not PromptExchange.query.filter_by(student_id=alex.id, assignment_id=assignment.id).first():
+        for ex_num, student_msg, ai_msg, has_pb in demo_exchanges:
+            concepts = ["framing theory", "agenda-setting theory"] if ex_num <= 3 else \
+                       ["framing theory"] if ex_num <= 6 else ["framing theory", "confirmation bias"]
+            db.session.add(PromptExchange(
+                student_id=alex.id,
+                assignment_id=assignment.id,
+                student_message=student_msg,
+                ai_response=ai_msg,
+                concepts_applied=concepts,
+                has_pushback=has_pb,
+                exchange_number=ex_num,
+                timestamp=now - timedelta(days=3, hours=2 - ex_num * 0.3),
+            ))
+        db.session.commit()
 
     if not Output.query.filter_by(student_id=alex.id, assignment_id=assignment.id).first():
         db.session.add(Output(

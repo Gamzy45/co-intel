@@ -139,6 +139,8 @@
   .strip-sep { width:1px; height:12px; background:var(--border); flex-shrink:0; }
   .strip-exchange { color:var(--text-secondary); flex-shrink:0; white-space:nowrap; font-size:12px; }
   .strip-desc { color:var(--text-tertiary); min-width:0; flex:1; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .strip-phase-label { font-size:11px; color:var(--text-tertiary); white-space:nowrap; flex-shrink:0; }
+  .strip-phase-label.active { color:var(--course-accent, var(--accent)); font-weight:500; }
   /* Criteria panel */
   .scaffold-criteria {
     display:flex; align-items:center; gap:8px; flex-wrap:nowrap;
@@ -335,7 +337,11 @@
 
   {# Phase indicator strip #}
   <div class="scaffold-phase">
-    <span class="pill pill-orange" style="font-size:10px;padding:2px 8px;flex-shrink:0;" id="strip-phase-pill">Phase {{ current_phase }} of 3</span>
+    <span class="strip-phase-label" id="strip-phase-inquire">Inquire 1–{{ phase_1_end }}</span>
+    <span style="color:var(--border);font-size:10px;flex-shrink:0;">›</span>
+    <span class="strip-phase-label" id="strip-phase-collaborate">Collaborate {{ phase_1_end + 1 }}–{{ phase_2_end }}</span>
+    <span style="color:var(--border);font-size:10px;flex-shrink:0;">›</span>
+    <span class="strip-phase-label" id="strip-phase-evaluate">Evaluate {{ phase_2_end + 1 }}+</span>
     <span class="strip-sep"></span>
     <span class="strip-exchange" id="strip-exchange-label">Exchange {{ exchange_count }} of {{ min_exchanges }} minimum</span>
     <span class="strip-sep"></span>
@@ -345,8 +351,8 @@
   {# Compact criteria panel #}
   <div class="scaffold-criteria">
     <span class="criteria-panel-label">How you will be assessed</span>
-    {% for c in archetype_data.criteria %}
-    <button class="criteria-cpill" onclick="showCriterion({{ loop.index0 }})">{{ c.criterion_name }}</button>
+    {% for name in ['Intellectual ownership', 'Depth of elaboration', 'Critical evaluation', 'Knowledge application'] %}
+    <button class="criteria-cpill" onclick="showCriterion({{ loop.index0 }})">{{ name }}</button>
     {% endfor %}
   </div>
 
@@ -408,30 +414,34 @@
   <div style="margin-bottom:14px;">
     <div style="font-size:13px;font-weight:500;color:var(--text-secondary);margin-bottom:8px;">How this session works</div>
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">
-      {% set phases = archetype_data.phases %}
       <div style="border:1px solid var(--border);border-radius:8px;padding:10px 12px;background:var(--bg-surface);">
-        <div style="font-size:12px;font-weight:600;color:var(--text-orange);margin-bottom:4px;">PHASE 1 &middot; EXCHANGES 1–{{ phase_1_end }}</div>
-        <div style="font-size:14px;color:var(--text-secondary);line-height:1.55;">{{ phases[0] if phases|length > 0 else '' }}</div>
+        <div style="font-size:12px;font-weight:600;color:var(--text-orange);margin-bottom:4px;">INQUIRE &middot; EXCHANGES 1–{{ phase_1_end }}</div>
+        <div style="font-size:14px;color:var(--text-secondary);line-height:1.55;">AI draws out your thinking and stress-tests it.</div>
       </div>
       <div style="border:1px solid var(--border);border-radius:8px;padding:10px 12px;background:var(--bg-surface);">
-        <div style="font-size:12px;font-weight:600;color:var(--text-orange);margin-bottom:4px;">PHASE 2 &middot; EXCHANGES {{ phase_1_end + 1 }}–{{ phase_2_end }}</div>
-        <div style="font-size:14px;color:var(--text-secondary);line-height:1.55;">{{ phases[1] if phases|length > 1 else '' }}</div>
+        <div style="font-size:12px;font-weight:600;color:var(--text-orange);margin-bottom:4px;">COLLABORATE &middot; EXCHANGES {{ phase_1_end + 1 }}–{{ phase_2_end }}</div>
+        <div style="font-size:14px;color:var(--text-secondary);line-height:1.55;">AI builds alongside you while you make the decisions.</div>
       </div>
       <div style="border:1px solid var(--border);border-radius:8px;padding:10px 12px;background:var(--bg-surface);">
-        <div style="font-size:12px;font-weight:600;color:var(--text-orange);margin-bottom:4px;">PHASE 3 &middot; EXCHANGES {{ phase_2_end + 1 }}+</div>
-        <div style="font-size:14px;color:var(--text-secondary);line-height:1.55;">{{ phases[2] if phases|length > 2 else '' }}</div>
+        <div style="font-size:12px;font-weight:600;color:var(--text-orange);margin-bottom:4px;">EVALUATE &middot; EXCHANGES {{ phase_2_end + 1 }}+</div>
+        <div style="font-size:14px;color:var(--text-secondary);line-height:1.55;">AI gives specific constructive feedback on what you developed.</div>
       </div>
     </div>
   </div>
 
-  {# Criteria cards #}
+  {# Criteria cards — universal four criteria #}
   <div>
     <div style="font-size:13px;font-weight:500;color:var(--text-secondary);margin-bottom:6px;">How you will be assessed</div>
     <div class="criteria-grid">
-      {% for c in archetype_data.criteria %}
+      {% for name, desc in [
+        ('Intellectual ownership', 'Are the ideas in this conversation yours?'),
+        ('Depth of elaboration',   'Did your thinking get deeper as the conversation progressed?'),
+        ('Critical evaluation',    'Did you judge what AI produced rather than accept it?'),
+        ('Knowledge application',  'Did you use what you learned in class to steer the conversation?'),
+      ] %}
       <div class="criteria-card">
-        <div class="criteria-name">{{ c.criterion_name }}</div>
-        <div class="criteria-desc">{{ c.criterion_description }}</div>
+        <div class="criteria-name">{{ name }}</div>
+        <div class="criteria-desc">{{ desc }}</div>
         <div class="criteria-levels">
           <span class="criteria-level-label level-emerging">Needs work</span>
           <span class="criteria-level-arrow">→</span>
@@ -611,106 +621,42 @@
   const requiredConcepts = {{ required_concepts | tojson }};
   const conceptsRequired = {{ 'true' if assignment.concepts_required else 'false' }};
 
-  /* ── Archetype / phase config ─────────────────────────── */
-  const archetypeKey = '{{ assignment.archetype or "challenger" }}';
-  const phase1End    = {{ phase_1_end }};
-  const phase2End    = {{ phase_2_end }};
-  const CRITERIA     = {{ archetype_data.criteria | tojson }};
+  /* ── Phase config ─────────────────────────────────────── */
+  const phase1End = {{ phase_1_end }};
+  const phase2End = {{ phase_2_end }};
 
-  /* Phase descriptions per archetype */
+  /* Universal criteria */
+  const CRITERIA = [
+    { criterion_name: 'Intellectual ownership', criterion_description: 'Are the ideas in this conversation yours?', level_emerging: 'Needs work', level_developing: 'Developing', level_integrated: 'Completed' },
+    { criterion_name: 'Depth of elaboration',   criterion_description: 'Did your thinking get deeper as the conversation progressed?', level_emerging: 'Needs work', level_developing: 'Developing', level_integrated: 'Completed' },
+    { criterion_name: 'Critical evaluation',    criterion_description: 'Did you judge what AI produced rather than accept it?', level_emerging: 'Needs work', level_developing: 'Developing', level_integrated: 'Completed' },
+    { criterion_name: 'Knowledge application',  criterion_description: 'Did you use what you learned in class to steer the conversation?', level_emerging: 'Needs work', level_developing: 'Developing', level_integrated: 'Completed' },
+  ];
+
+  /* Phase descriptions — universal */
   const PHASE_DESCRIPTIONS = {
-    design_thinker: {
-      1: 'AI is exploring the problem space with you — no solutions yet.',
-      2: 'AI is deepening the directions you are most drawn to.',
-      3: 'AI is helping you make decisions and develop your chosen direction.',
-    },
-    challenger: {
-      1: 'AI is building the strongest version of your argument.',
-      2: 'AI is introducing challenges and complications.',
-      3: 'AI is probing the remaining weaknesses in your argument.',
-    },
-    prober: {
-      1: 'AI is asking broad questions to surface what you already know.',
-      2: 'AI is probing the foundations of your strongest claims.',
-      3: 'AI is asking questions to help you synthesize your thinking.',
-    },
-    narrative_coach: {
-      1: 'AI is helping you find your authentic voice.',
-      2: 'AI is helping you build your narrative structure.',
-      3: 'AI is helping you decide what to keep, cut, and sharpen.',
-    },
+    1: 'AI is drawing out and stress-testing your thinking.',
+    2: 'AI is building alongside you.',
+    3: 'AI is giving you specific feedback on what you developed.',
   };
 
-  /* Nudge messages per archetype and phase */
+  /* Nudge messages — phase-specific */
   const NUDGES = {
-    design_thinker: {
-      1: [
-        'Have you explored a direction that surprises you?',
-        'What if you approached this from a completely different angle?',
-        'Have you considered what your audience most needs to understand?',
-      ],
-      2: [
-        'Which direction keeps pulling you back — why?',
-        'What is missing from this concept that would make it feel complete?',
-        'Push this idea further — what are three different ways to execute it?',
-      ],
-      3: [
-        'Which direction best serves your learning objective and why?',
-        'What is the one thing that is not working yet?',
-        'Can you articulate why you are choosing this direction over the others?',
-      ],
-    },
-    challenger: {
-      1: [
-        'What is the strongest version of your position?',
-        'What evidence best supports your argument?',
-        'What would make your argument even harder to challenge?',
-      ],
-      2: [
-        'Try pushing back with a course concept.',
-        "What is the weakness in AI's counterargument?",
-        'Can you defend your position with specific evidence?',
-      ],
-      3: [
-        'What vulnerability remains in your argument?',
-        'Where is your reasoning least convincing?',
-        'What would your strongest critic say?',
-      ],
-    },
-    prober: {
-      1: [
-        'Try answering with more specificity than your last response.',
-        'What do you know about this that you feel most confident in?',
-        'What feels most uncertain or unresolved?',
-      ],
-      2: [
-        'What is that certainty based on?',
-        'What would have to be true for your claim to be wrong?',
-        'What are you assuming your reader already accepts?',
-      ],
-      3: [
-        'How has your thinking shifted since you started?',
-        'What is the one idea you feel most confident defending?',
-        'What would strengthen your position?',
-      ],
-    },
-    narrative_coach: {
-      1: [
-        'Does this feel like your voice or a generic version of it?',
-        'Who are you imagining as you write this?',
-        'What do you most want your audience to feel?',
-      ],
-      2: [
-        'Which idea needs to come first for the others to make sense?',
-        'Where is the turning point in your narrative?',
-        'What is the one thing you most want your audience to remember?',
-      ],
-      3: [
-        'Which version of this idea is most you?',
-        'What are you holding onto that you should probably cut?',
-        'What is the one sentence you would be most proud of?',
-      ],
-    },
+    1: [
+      'What do you actually think about this — not just what AI said?',
+      'Try pushing back with a specific reason.',
+      'Get more specific — what evidence supports that claim?',
+    ],
+    2: [
+      'Which direction feels most like your own thinking?',
+      'Make a decision and explain why.',
+      'What would you add that AI has not suggested?',
+    ],
+    3: [
+      'What is the weakest part of what you have developed?',
+      'What would you change based on this feedback?',
+      'What did you learn about your own thinking from this conversation?',
+    ],
   };
 
   /* Nudge state — per-phase index so cycling works across phase transitions */
@@ -720,17 +666,20 @@
 
   /* ── Phase helpers ────────────────────────────────────── */
   function getCurrentPhase() {
-    if (exchangeCount <= phase1End) return 1;
-    if (exchangeCount <= phase2End) return 2;
+    if (exchangeCount < phase1End) return 1;
+    if (exchangeCount < phase2End) return 2;
     return 3;
   }
 
   function updatePhaseStrip() {
     const phase = getCurrentPhase();
-    const desc  = (PHASE_DESCRIPTIONS[archetypeKey] || {})[phase] || '';
-    document.getElementById('strip-phase-pill').textContent    = `Phase ${phase} of 3`;
+    const desc  = PHASE_DESCRIPTIONS[phase] || '';
     document.getElementById('strip-exchange-label').textContent = `Exchange ${exchangeCount} of ${minExchanges} minimum`;
     document.getElementById('strip-description').textContent   = desc;
+    ['inquire', 'collaborate', 'evaluate'].forEach((name, i) => {
+      const el = document.getElementById('strip-phase-' + name);
+      if (el) el.classList.toggle('active', phase === i + 1);
+    });
   }
 
   /* ── Brief bar toggle ─────────────────────────────────── */
@@ -769,7 +718,7 @@
   /* ── Nudge system ─────────────────────────────────────── */
   function showNudge() {
     const phase = getCurrentPhase();
-    const msgs  = ((NUDGES[archetypeKey] || {})[phase]) || [];
+    const msgs  = NUDGES[phase] || [];
     if (!msgs.length) return;
     const idx = nudgePhaseIndex[phase] % msgs.length;
     nudgePhaseIndex[phase] = idx + 1;

@@ -1,5 +1,6 @@
 import json
 import os
+import re
 from datetime import datetime
 
 import anthropic
@@ -17,392 +18,177 @@ MODALITY_KEY_MAP = {
     "video script": "video_script",
 }
 
-ARCHETYPES = {
-    "challenger": {
-        "name": "The Challenger",
-        "one_line_description": "Takes opposing positions and offers arguments with deliberate weaknesses for you to find and refute.",
-        "primary_task": "Defend and refine your position under intellectual pressure.",
-        "core_rules": (
-            "You are The Challenger. Always take a position that complicates or opposes what the student just said. "
-            "Never simply agree. Acknowledge strong points briefly then immediately introduce a complication, counterexample, or opposing perspective. "
-            "Sometimes deliberately offer arguments with identifiable weaknesses designed to invite the student to catch them. "
-            "Never reveal that an argument is intentionally weak. End most responses with a direct challenge. "
-            "Never insult or dismiss student ideas. Write in plain conversational prose with no markdown formatting, "
-            "no asterisks, no bold text, no bullet points. Keep responses concise and natural. Never exceed 100 words. "
-            "Use fewer words whenever possible. Do not pad responses to reach any minimum length. "
-            "If your response reaches close to the 100 word limit and you have a further challenge or complication that genuinely changes the picture "
-            "end with one brief question offering to pursue it. "
-            "For example: there is another angle that complicates this further — want to explore it? "
-            "Only do this when you have something substantive that did not fit. Never add this offer if your response feels complete."
+PHASE_SYSTEM = {
+    "inquire": {
+        "supportive": (
+            "You are in the inquiry phase. Begin by asking broad open questions to draw out what the student already "
+            "knows and thinks. As the student develops a position introduce gentle complications framed as things worth "
+            "considering. Stay warm and patient throughout. Move between questioning and complicating naturally based "
+            "on what the student says. Never overwhelm. "
+            "Example early: what draws you to this topic and what do you already feel confident about? "
+            "Example later: your argument is interesting here — one thing worth considering is whether it holds if you "
+            "factor in X. What do you think?"
         ),
-        "phase_1_rules": (
-            "You are in the steelmanning phase (exchanges 1 through {phase_1_end}). "
-            "Take the student's position and make the strongest possible version of it. "
-            "Be generous. Show the student what their argument looks like at its best before challenging it."
+        "balanced": (
+            "You are in the inquiry phase. Begin with focused questions targeting the most interesting or "
+            "underdeveloped parts of what the student says. As the student develops a position take clear opposing "
+            "positions and defend them directly. Move fluidly between questioning and challenging based on the "
+            "conversation. Be direct and persistent but intellectually respectful. "
+            "Example early: you mentioned X — what specific aspect are you most interested in analyzing and why? "
+            "Example later: I want to push back on this — I think there is a significant problem with X and here is "
+            "why. How do you respond?"
         ),
-        "phase_2_rules": (
-            "You are in the productive friction phase (exchanges after {phase_1_end} through {phase_2_end}). "
-            "Introduce flawed counterarguments, opposing perspectives, and complications. "
-            "Some arguments should have deliberate weaknesses for the student to find."
+        "demanding": (
+            "You are in the inquiry phase. Immediately probe the foundations of everything the student says. Move "
+            "quickly to direct adversarial challenge once the student has established a position. Steelman opposing "
+            "positions as strongly as possible. Do not let any undefended claim pass. Push until the student gives a "
+            "response grounded in specific reasoning or course knowledge. "
+            "Example early: you said that with certainty — what is that certainty based on and what would have to be "
+            "true for you to be wrong? "
+            "Example later: your argument collapses if you accept this premise which most scholars in this field do. "
+            "Defend your position with specific evidence or revise it."
         ),
-        "phase_3_rules": (
-            "You are in the refinement challenge phase (exchanges after {phase_2_end}). "
-            "Stop introducing new content. Help the student identify remaining weaknesses in their own argument."
-        ),
-        "phases": [
-            "AI presents your argument at its strongest before challenging it.",
-            "AI introduces counterarguments, some with deliberate weaknesses to find.",
-            "AI helps you identify remaining weaknesses in your own argument.",
-        ],
-        "modality_adaptations": {
-            "critical_analysis": "Challenge logical consistency, evidence quality, and theoretical application. Ask: your argument assumes X but does the research support that?",
-            "presentation_outline": "Challenge argument structure and persuasive effectiveness. Ask: your third point contradicts your first — how do you reconcile that?",
-            "game_design": "Challenge design logic and learning effectiveness. Ask: does this mechanic actually teach the concept or just illustrate it?",
-            "podcast_script": "Challenge editorial choices and argument coherence. Ask: you are making three different arguments here — which one is the actual point of this episode?",
-            "video_script": "Challenge narrative clarity and visual logic. Ask: what does the viewer see during this claim?",
-        },
-        "contribution_level_modifiers": {
-            "guide_only": "Ask challenging questions only. Do not offer any arguments, counterexamples, or content of your own.",
-            "thinking_partner": "Contribute arguments and counterpoints for the student to evaluate and challenge. This is the default.",
-            "collaborator": "Contribute substantive arguments, evidence, and frameworks generously. The student evaluates, challenges, and builds.",
-        },
-        "criteria": [
-            {
-                "criterion_name": "Concept application",
-                "criterion_description": "Did you apply course concepts correctly and specifically to make arguments — not just name them?",
-                "level_emerging": "Concept is named but not applied, or used incorrectly.",
-                "level_developing": "Concept is applied correctly in a general way.",
-                "level_integrated": "Concept is applied precisely with specific evidence tied to the student's own argument.",
-            },
-            {
-                "criterion_name": "Independent contribution",
-                "criterion_description": "Did you introduce ideas and claims that did not appear in any AI response?",
-                "level_emerging": "Student ideas closely mirror AI responses.",
-                "level_developing": "Some student ideas have no direct parallel in AI responses.",
-                "level_integrated": "Student consistently introduces ideas and connections that do not appear anywhere in AI responses.",
-            },
-            {
-                "criterion_name": "Pushback quality",
-                "criterion_description": "When you disagreed with AI, did you give a disciplinary reason and build something new from it?",
-                "level_emerging": "Student disagrees without disciplinary reasoning.",
-                "level_developing": "Student disagrees and names a concept or reason.",
-                "level_integrated": "Student disagrees, gives disciplinary reasoning, and builds a new position from the pushback.",
-            },
-            {
-                "criterion_name": "Argumentative development",
-                "criterion_description": "Did your position become more precise and defensible across the conversation?",
-                "level_emerging": "Position is the same at end as beginning.",
-                "level_developing": "Position has been refined in response to at least one challenge.",
-                "level_integrated": "Position has been fundamentally strengthened and complicated in a way the student can articulate explicitly.",
-            },
-        ],
     },
-
-    "prober": {
-        "name": "The Prober",
-        "one_line_description": "Draws out your thinking through questioning only — never contributes content or takes positions.",
-        "primary_task": "Develop and deepen your own thinking through sustained inquiry.",
-        "core_rules": (
-            "You are The Prober. Every single response must end with a question. "
-            "Never offer your own opinion, argument, perspective, or factual contribution. "
-            "If the student asks what you think, deflect and ask them what they think and why. "
-            "Never affirm or deny whether the student's answer is correct. "
-            "Never use phrases like 'great point', 'exactly right', or 'well said'. "
-            "Write in plain conversational prose with no markdown formatting. Keep responses concise and natural. Never exceed 100 words. "
-            "Use fewer words whenever possible. Do not pad responses to reach any minimum length. "
-            "Never offer to elaborate or say more. Your role is to ask questions only. "
-            "If you have more ground to cover ask another question in your next response rather than offering additional content."
+    "collaborate": {
+        "supportive": (
+            "You are in the collaborating phase. Only build on ideas the student has already introduced. Never "
+            "generate a new idea from scratch. Expand and develop what the student offers. After every contribution "
+            "ask the student what they think and whether it fits their vision. "
+            "Example: you mentioned X — let me help you think through what that would look like in practice. What "
+            "aspects feel most important to develop?"
         ),
-        "phase_1_rules": (
-            "You are in the orientation probing phase. "
-            "Ask broad invitational questions to find out what the student already knows and cares about."
+        "balanced": (
+            "You are in the collaborating phase. Contribute new ideas and possibilities framed as options for the "
+            "student to evaluate. For every idea you offer immediately ask the student what they think and whether "
+            "it fits. "
+            "Example: here are two or three directions that could work — which one feels most aligned with what you "
+            "are trying to say and why?"
         ),
-        "phase_2_rules": (
-            "You are in the depth probing phase. "
-            "Narrow in on the most interesting or underdeveloped thread. "
-            "Probe the foundations of the student's most confident claims."
+        "demanding": (
+            "You are in the collaborating phase. Contribute generously including unexpected angles and connections "
+            "the student may not have considered. Challenge the student to evaluate all options rigorously and justify "
+            "choices with explicit reasoning tied to the learning objective. Never let the student choose a direction "
+            "arbitrarily. "
+            "Example: you have several directions available — eliminate the weaker ones and tell me exactly why each "
+            "one does not serve your goal as well as the one you choose."
         ),
-        "phase_3_rules": (
-            "You are in the synthesis probing phase. "
-            "Ask questions that help the student see the shape of what they have built across the conversation."
-        ),
-        "phases": [
-            "AI asks broad questions to surface what you already know and care about.",
-            "AI narrows in on the most interesting thread and probes your confident claims.",
-            "AI asks questions that help you see the shape of your whole argument.",
-        ],
-        "modality_adaptations": {
-            "critical_analysis": "Probe logical structure, evidence quality, and theoretical application.",
-            "presentation_outline": "Probe argument structure and audience awareness.",
-            "game_design": "Probe learning objectives and player experience.",
-            "podcast_script": "Probe voice, audience, and narrative purpose.",
-            "video_script": "Probe visual storytelling and narrative arc.",
-        },
-        "contribution_level_modifiers": {
-            "guide_only": "Questions only. This is the default and only mode for The Prober.",
-            "thinking_partner": "Ask probing questions but occasionally offer a brief observation about a pattern in the student's thinking. Frame it as a noticing, not an evaluation.",
-            "collaborator": "Treat as thinking_partner.",
-        },
-        "criteria": [
-            {
-                "criterion_name": "Elaboration depth",
-                "criterion_description": "Did you answer questions with increasing specificity and complexity?",
-                "level_emerging": "Answers are brief and do not build on previous responses.",
-                "level_developing": "Answers show some deepening but plateau at a general level.",
-                "level_integrated": "Each answer adds precision or complexity to the previous one.",
-            },
-            {
-                "criterion_name": "Position development",
-                "criterion_description": "Did you develop and maintain a coherent intellectual position across the conversation?",
-                "level_emerging": "Position shifts vaguely without cumulative development.",
-                "level_developing": "A position emerges and is maintained across most exchanges.",
-                "level_integrated": "Position develops with increasing clarity and specificity across all exchanges.",
-            },
-            {
-                "criterion_name": "Concept integration",
-                "criterion_description": "Did you bring course concepts into your answers without being prompted by AI?",
-                "level_emerging": "Course concepts do not appear in student responses.",
-                "level_developing": "One or two concepts appear independently.",
-                "level_integrated": "Student consistently draws on course concepts to develop and support thinking.",
-            },
-            {
-                "criterion_name": "Synthesis",
-                "criterion_description": "Did you connect threads from the conversation into a coherent position by the end?",
-                "level_emerging": "Each exchange remains isolated.",
-                "level_developing": "Student connects two threads but does not produce a new unified position.",
-                "level_integrated": "Student synthesizes multiple threads into a new claim that goes beyond any single exchange.",
-            },
-        ],
     },
-
-    "design_thinker": {
-        "name": "The Design Thinker",
-        "one_line_description": "Generative and expansive in early phases, convergent and decision-focused in later phases — never produces finished outputs.",
-        "primary_task": "Generate possibilities and then make principled creative choices between them.",
-        "core_rules": (
-            "You are The Design Thinker. In divergent mode be generative, expansive, and possibility-oriented. "
-            "Never close down options, never evaluate ideas as good or bad, never push toward a single solution. "
-            "In convergent mode be selective and decision-oriented. "
-            "Never produce a finished prototype, completed design, or final output. "
-            "Write in plain conversational prose with no markdown formatting. Keep responses concise and natural. Never exceed 100 words. "
-            "Use fewer words whenever possible. Do not pad responses to reach any minimum length. "
-            "In the divergent phase only if your response reaches close to the 100 word limit and you have more genuinely different directions worth exploring "
-            "end with one brief offer such as: there are more unexpected directions here if you want to keep exploring. "
-            "Never offer to elaborate in the convergent phase — that phase is about narrowing not expanding."
+    "evaluate": {
+        "supportive": (
+            "You are in the evaluating phase. Identify two specific things that are working well with evidence and "
+            "one specific area for development framed as a question. Be encouraging without being empty or "
+            "sycophantic. "
+            "Example: your argument about X is genuinely strong because of Y — the area I would think more about is "
+            "Z. What do you think is the weakest part of what you have developed?"
         ),
-        "phase_1_rules": (
-            "You are in the divergent generation phase. "
-            "Offer multiple possibilities, unexpected angles, and creative provocations. Quantity over quality."
+        "balanced": (
+            "You are in the evaluating phase. Give equal specific weight to what is working and what needs "
+            "development. Name the strongest moment in the conversation and the moment where the thinking was least "
+            "convincing. Ask the student what they would change based on this feedback. "
+            "Example: the strongest part of your thinking was X — that was original and well-reasoned. The least "
+            "convincing part was Y because Z. What would you revise?"
         ),
-        "phase_2_rules": (
-            "You are in the divergent deepening phase. "
-            "Stop generating new possibilities. Deepen the ones the student has shown most interest in. No evaluation."
+        "demanding": (
+            "You are in the evaluating phase. Give a rigorous honest assessment prioritizing specificity over "
+            "encouragement. Name the most significant weakness in the argument or design directly. Do not balance "
+            "negative feedback with positive feedback artificially. Ask the student to defend or revise the weakest "
+            "element. "
+            "Example: the core problem with your argument is X and it undermines the whole analysis. Either fix that "
+            "or explain why it is not actually a problem."
         ),
-        "phase_3_rules": (
-            "You are in the convergent coaching phase. "
-            "Help the student make decisions and develop their chosen direction. Generate no new ideas."
-        ),
-        "phases": [
-            "AI generates multiple possibilities, unexpected angles, and creative provocations.",
-            "AI deepens the directions you are most drawn to without evaluating them.",
-            "AI helps you make principled decisions and develop your chosen direction.",
-        ],
-        "modality_adaptations": {
-            "game_design": "In divergent phase generate unexpected game mechanics and non-obvious ways to embed course concepts. In convergent phase ask about learning effectiveness and player experience.",
-            "presentation_outline": "In divergent phase generate unexpected structures. In convergent phase ask about audience impact.",
-            "podcast_script": "In divergent phase generate unexpected formats and narrative structures. In convergent phase ask about listener experience.",
-            "video_script": "In divergent phase generate unexpected visual approaches. In convergent phase ask about visual and verbal coherence.",
-            "critical_analysis": "In divergent phase generate unexpected analytical angles. In convergent phase ask about argument coherence.",
-        },
-        "contribution_level_modifiers": {
-            "guide_only": "In divergent phase ask questions that help the student generate their own possibilities. In convergent phase ask questions only.",
-            "thinking_partner": "Offer multiple possibilities in divergent phase. Ask questions only in convergent phase. This is the default.",
-            "collaborator": "Offer rich possibilities and unexpected connections in divergent phase. Contribute substantive evaluative input in convergent phase while letting the student make final decisions.",
-        },
-        "criteria": [
-            {
-                "criterion_name": "Generative range",
-                "criterion_description": "Did you explore multiple genuinely different directions rather than fixating on your first idea?",
-                "level_emerging": "Student returns to the same idea repeatedly.",
-                "level_developing": "Student explores two or three directions that are variations on the same concept.",
-                "level_integrated": "Student explores genuinely different directions including at least one unexpected angle.",
-            },
-            {
-                "criterion_name": "Unexpected connections",
-                "criterion_description": "Did you make connections between your topic and ideas from unexpected domains?",
-                "level_emerging": "Student stays within the obvious domain of the assignment.",
-                "level_developing": "Student makes one connection to an adjacent domain.",
-                "level_integrated": "Student makes multiple connections across domains showing genuine creative thinking.",
-            },
-            {
-                "criterion_name": "Decision quality",
-                "criterion_description": "Did you choose a direction based on explicit reasoning tied to your learning objective?",
-                "level_emerging": "Student chooses arbitrarily or defaults to AI suggestion.",
-                "level_developing": "Student gives a reason not tied to the learning objective.",
-                "level_integrated": "Student makes an explicit principled choice tied to the learning objective and can articulate why.",
-            },
-            {
-                "criterion_name": "Concept-driven refinement",
-                "criterion_description": "Did you use course concepts to evaluate and develop your chosen direction in the convergent phase?",
-                "level_emerging": "Course concepts do not appear in the convergent phase.",
-                "level_developing": "Student mentions a concept but does not use it to evaluate design decisions.",
-                "level_integrated": "Student uses course concepts explicitly to justify creative choices and refine the design.",
-            },
-        ],
-    },
-
-    "narrative_coach": {
-        "name": "The Narrative Coach",
-        "one_line_description": "Focuses on voice, structure, and editorial choices — never evaluates arguments logically, only how they land with an audience.",
-        "primary_task": "Find your authentic voice and make deliberate communicative choices for a specific audience.",
-        "core_rules": (
-            "You are The Narrative Coach. Never evaluate the quality of the student's argument in logical terms. "
-            "Always engage with voice, tone, audience, structure, and emotional impact. "
-            "Never rewrite the student's work. You may offer a single alternative phrasing as an example but "
-            "always frame it as 'here is one possibility — what do you prefer?' "
-            "Write in plain conversational prose with no markdown formatting. Keep responses concise and natural. Never exceed 100 words. "
-            "Use fewer words whenever possible. Do not pad responses to reach any minimum length. "
-            "If your response reaches close to the 100 word limit and you noticed something further about the student's voice, structure, or audience that would be useful "
-            "end with one brief offer such as: there is more I noticed about this if you want to dig into it. "
-            "Only do this when you genuinely have a specific observation that did not fit. Do not add this offer if your response feels complete."
-        ),
-        "phase_1_rules": (
-            "You are in the voice finding phase. "
-            "Help the student identify their authentic voice and perspective."
-        ),
-        "phase_2_rules": (
-            "You are in the structure building phase. "
-            "Help the student organize their ideas into a narrative arc."
-        ),
-        "phase_3_rules": (
-            "You are in the editorial refinement phase. "
-            "Help the student make final decisions about what to keep, cut, and sharpen."
-        ),
-        "phases": [
-            "AI helps you find your authentic voice and perspective.",
-            "AI helps you organize your ideas into a narrative arc.",
-            "AI helps you decide what to keep, cut, and sharpen.",
-        ],
-        "modality_adaptations": {
-            "podcast_script": "Focus on audio-specific considerations — how it sounds spoken aloud, where the listener needs a pause.",
-            "video_script": "Focus on the relationship between what is said and what is seen.",
-            "presentation_outline": "Focus on live delivery and audience connection.",
-            "critical_analysis": "Focus on how the argument is communicated, not whether it is logically valid.",
-            "game_design": "Focus on player experience and emotional design.",
-        },
-        "contribution_level_modifiers": {
-            "guide_only": "Ask questions about voice, structure, and audience only.",
-            "thinking_partner": "Occasionally offer a single alternative phrasing as a possibility, not a recommendation. This is the default.",
-            "collaborator": "Offer substantive editorial input including alternative structures and phrasing options.",
-        },
-        "criteria": [
-            {
-                "criterion_name": "Voice consistency",
-                "criterion_description": "Does your writing maintain a recognizable and consistent voice, or drift toward generic language?",
-                "level_emerging": "Voice is inconsistent or indistinguishable from generic writing.",
-                "level_developing": "Voice is present in some exchanges but disappears when the student runs out of ideas.",
-                "level_integrated": "Voice is consistent and recognizable throughout.",
-            },
-            {
-                "criterion_name": "Editorial agency",
-                "criterion_description": "When offered alternatives, did you evaluate them critically and make deliberate choices?",
-                "level_emerging": "Student accepts first suggestion without evaluation.",
-                "level_developing": "Student considers alternatives but cannot articulate why they chose one.",
-                "level_integrated": "Student makes deliberate choices and explains the reasoning in terms of audience and purpose.",
-            },
-            {
-                "criterion_name": "Audience awareness",
-                "criterion_description": "Did you develop an increasingly specific model of your audience across exchanges?",
-                "level_emerging": "Audience is vague or generic throughout.",
-                "level_developing": "Student identifies a specific audience but does not adjust choices accordingly.",
-                "level_integrated": "Student makes concrete choices about tone, structure, and content based on a specific, well-defined audience.",
-            },
-            {
-                "criterion_name": "Structural intentionality",
-                "criterion_description": "Did you make deliberate decisions about the shape of your narrative, or did it emerge by default?",
-                "level_emerging": "Structure emerges by default from the order ideas occurred.",
-                "level_developing": "Student makes some structural decisions but cannot explain why.",
-                "level_integrated": "Student makes explicit structural decisions tied to the effect they want to produce.",
-            },
-        ],
     },
 }
 
+MODALITY_GUIDANCE = {
+    "inquire": {
+        "critical_analysis": "Focus on the argument the student wants to make and the evidence they have for it.",
+        "podcast_script": "Focus on the student's editorial voice, intended audience, and the angle they want to take.",
+        "game_design": "Focus on what the student wants players to learn and why it matters.",
+        "presentation_outline": "Focus on the student's argument and intended audience.",
+        "video_script": "Focus on the story the student wants to tell and the viewer experience they want to create.",
+    },
+    "collaborate": {
+        "critical_analysis": "Help develop the argument structure and evidence.",
+        "podcast_script": "Help develop the narrative structure and voice.",
+        "game_design": "Help develop the game mechanics and player experience.",
+        "presentation_outline": "Help develop the argument flow and key points.",
+        "video_script": "Help develop the narrative arc and visual structure.",
+    },
+    "evaluate": {
+        "critical_analysis": "Assess the argument's logical coherence and use of evidence.",
+        "podcast_script": "Assess how effectively the script communicates to its intended audience.",
+        "game_design": "Assess whether the design achieves its learning objective.",
+        "presentation_outline": "Assess the argument's persuasive effectiveness for the intended audience.",
+        "video_script": "Assess whether the script achieves its intended emotional and intellectual impact.",
+    },
+}
+
+UNIVERSAL_CRITERIA = [
+    {
+        "criterion_name": "Intellectual ownership",
+        "criterion_description": "Are the ideas in this conversation yours?",
+        "level_emerging": "Needs work",
+        "level_developing": "Developing",
+        "level_integrated": "Completed",
+    },
+    {
+        "criterion_name": "Depth of elaboration",
+        "criterion_description": "Did your thinking get deeper as the conversation progressed?",
+        "level_emerging": "Needs work",
+        "level_developing": "Developing",
+        "level_integrated": "Completed",
+    },
+    {
+        "criterion_name": "Critical evaluation",
+        "criterion_description": "Did you judge what AI produced rather than accept it?",
+        "level_emerging": "Needs work",
+        "level_developing": "Developing",
+        "level_integrated": "Completed",
+    },
+    {
+        "criterion_name": "Knowledge application",
+        "criterion_description": "Did you use what you learned in class to steer the conversation?",
+        "level_emerging": "Needs work",
+        "level_developing": "Developing",
+        "level_integrated": "Completed",
+    },
+]
+
+CLOSING_RULES = (
+    "Write in plain conversational prose with no markdown formatting no asterisks no bold text no bullet points. "
+    "Never exceed 100 words. Use fewer words whenever possible. Do not pad responses to reach any minimum length. "
+    "Only offer to elaborate when your response genuinely runs out of space before running out of content."
+)
+
 
 def build_system_prompt(assignment, course, exchange_count: int) -> str:
-    """Build the full system prompt for an AI session based on archetype settings."""
-    archetype = ARCHETYPES.get(assignment.archetype or "challenger", ARCHETYPES["challenger"])
-
+    """Build the full system prompt for an AI session based on the phase progression system."""
     phase_1_end = assignment.phase_1_end or 3
     phase_2_end = assignment.phase_2_end or 6
 
     if exchange_count < phase_1_end:
-        phase_rules = archetype["phase_1_rules"].format(
-            phase_1_end=phase_1_end, phase_2_end=phase_2_end
-        )
+        phase_key = "inquire"
     elif exchange_count < phase_2_end:
-        phase_rules = archetype["phase_2_rules"].format(
-            phase_1_end=phase_1_end, phase_2_end=phase_2_end
-        )
+        phase_key = "collaborate"
     else:
-        phase_rules = archetype["phase_3_rules"].format(
-            phase_1_end=phase_1_end, phase_2_end=phase_2_end
-        )
+        phase_key = "evaluate"
+
+    intensity = getattr(assignment, "intensity", None) or "balanced"
+    phase_rules = PHASE_SYSTEM[phase_key][intensity]
 
     modality_key = MODALITY_KEY_MAP.get(assignment.modality or "", "")
-    modality_text = archetype["modality_adaptations"].get(
+    modality_guidance = MODALITY_GUIDANCE[phase_key].get(
         modality_key,
         "Adapt your approach to the specific requirements of this assignment.",
     )
 
-    contrib_key = assignment.contribution_level or "thinking_partner"
-    contrib_text = archetype["contribution_level_modifiers"].get(
-        contrib_key,
-        archetype["contribution_level_modifiers"]["thinking_partner"],
-    )
-
-    behavioral_emphasis = assignment.behavioral_emphasis or "balanced"
-    if behavioral_emphasis == "supportive":
-        emphasis_text = (
-            "Be encouraging and give the student time and space. "
-            "When the student struggles, offer a gentler version of the challenge before pressing further."
-        )
-    elif behavioral_emphasis == "demanding":
-        emphasis_text = (
-            "Be persistent and uncompromising. "
-            "Do not let vague statements or weak applications pass without probing them directly."
-        )
-    else:
-        emphasis_text = ""
-
-    parts = [
-        archetype["core_rules"],
-        phase_rules,
-        modality_text,
-        contrib_text,
-    ]
-
-    if emphasis_text:
-        parts.append(emphasis_text)
+    parts = [phase_rules, modality_guidance]
 
     supp = (assignment.supplementary_instructions or "").strip()
     if supp:
         parts.append(
             f"The instructor has added the following specific guidance, which you must follow "
             f"in addition to your core role: {supp}"
-        )
-
-    if assignment.concepts_required:
-        concepts_list = ", ".join(course.required_concepts) if course.required_concepts else "none specified"
-        parts.append(
-            f"The required course concepts for this assignment are: {concepts_list}. "
-            f"Do not restrict the student to only these concepts, but encourage their application when relevant."
-        )
-    else:
-        parts.append(
-            "Encourage the student to draw on relevant concepts, theories, and frameworks from their course "
-            "as they develop their thinking. Do not specify which concepts they must use. "
-            "Let the student determine which course knowledge is relevant to their chosen topic."
         )
 
     instr = (assignment.instructions or "").strip()
@@ -416,14 +202,7 @@ def build_system_prompt(assignment, course, exchange_count: int) -> str:
             "Help the student think deeply about any topic they raise."
         )
 
-    parts.append(
-        "You must respond in 100 words or fewer. Count every word before you respond. "
-        "If your draft exceeds 100 words cut it down before sending. This is a strict requirement. "
-        "Only offer to elaborate when your response genuinely runs out of space before running out of content. "
-        "If your response feels complete do not add an elaboration offer. "
-        "The offer should appear at most once per response and only when it is genuinely warranted. "
-        "Never make it feel like a formula."
-    )
+    parts.append(CLOSING_RULES)
 
     return "\n\n".join(parts)
 
@@ -444,7 +223,7 @@ def _fallback_summary(note: str) -> dict:
 
 
 def generate_session_summary(student_id: int, assignment_id: int) -> dict:
-    """Generate and cache an AI-scored session summary."""
+    """Generate and cache an AI-scored session summary using universal criteria."""
     from models.models import PromptExchange, Assignment, SessionSummary
     from extensions import db
 
@@ -452,8 +231,7 @@ def generate_session_summary(student_id: int, assignment_id: int) -> dict:
     if not assignment:
         return _fallback_summary("Assignment not found.")
 
-    archetype = ARCHETYPES.get(assignment.archetype or "challenger", ARCHETYPES["challenger"])
-    criteria = archetype["criteria"]
+    criteria_names = [c["criterion_name"] for c in UNIVERSAL_CRITERIA]
 
     exchanges = (
         PromptExchange.query
@@ -470,23 +248,19 @@ def generate_session_summary(student_id: int, assignment_id: int) -> dict:
         for ex in exchanges
     )
 
-    criteria_defs = "\n\n".join(
-        f"Criterion: {c['criterion_name']}\n"
-        f"Description: {c['criterion_description']}\n"
-        f"Needs work: {c['level_emerging']}\n"
-        f"Developing: {c['level_developing']}\n"
-        f"Completed: {c['level_integrated']}"
-        for c in criteria
-    )
-
     scoring_prompt = (
-        f"You are evaluating a student conversation. "
-        f"The assignment uses the archetype called {archetype['name']}.\n\n"
-        f"Evaluate the conversation against only these four criteria and nothing else:\n\n"
-        f"{criteria_defs}\n\n"
-        f"Do not reference any concepts that do not appear in this specific conversation. "
-        f"Do not mention any concept unless the student actually used it in their own messages. "
-        f"Base all feedback entirely on what this specific student wrote in this specific conversation.\n\n"
+        f"Evaluate this conversation against the following four criteria only.\n\n"
+        f"Intellectual ownership: did the student introduce their own ideas and positions rather than simply "
+        f"responding to AI.\n\n"
+        f"Depth of elaboration: did the student's thinking deepen across exchanges rather than staying at the "
+        f"same level.\n\n"
+        f"Critical evaluation: did the student evaluate and push back on AI output using their own reasoning.\n\n"
+        f"Knowledge application: did the student use course concepts or disciplinary knowledge to steer the "
+        f"conversation toward more rigorous territory.\n\n"
+        f"Score each criterion from 0 to 100 and assign a level of needs work, developing, or completed. "
+        f"Do not reference any archetype. "
+        f"Do not reference any concept that does not appear in this specific conversation. "
+        f"Base all scores and feedback entirely on what this specific student wrote.\n\n"
         f"=== Conversation Transcript ===\n{transcript}\n\n"
         f"IMPORTANT: Write all evidence sentences in second person, addressing the student directly as 'you'. "
         f"For example: 'You introduced an original idea that was not prompted by the AI.' "
@@ -496,11 +270,14 @@ def generate_session_summary(student_id: int, assignment_id: int) -> dict:
         f"- phase_reached: integer 1 through 3\n"
         f"- pushback_count: integer\n"
         f"- student_idea_percentage: integer 0 through 100\n"
-        f"- concept_scores: array of objects each with concept_name, introduced_by (\"student\" or \"ai\"), depth_score (0-100), times_used\n"
-        f"- criteria_scores: array of {len(criteria)} objects each with criterion_name, level (\"needs work\", \"developing\", or \"completed\"), score (0-100), evidence (one sentence in second person addressing the student as you)\n"
-        f"- key_moments: array of exactly 3 objects each with type (\"strongest\", \"pushback\", or \"gap\"), exchange_number, description (one sentence in second person)\n"
+        f"- concept_scores: array of objects each with concept_name, introduced_by (\"student\" or \"ai\"), "
+        f"depth_score (0-100), times_used\n"
+        f"- criteria_scores: array of 4 objects each with criterion_name, level (\"needs work\", \"developing\", "
+        f"or \"completed\"), score (0-100), evidence (one sentence in second person addressing the student as you)\n"
+        f"- key_moments: array of exactly 3 objects each with type (\"strongest\", \"pushback\", or \"gap\"), "
+        f"exchange_number, description (one sentence in second person)\n"
         f"- threads: array of exactly 3 objects each with text (one sentence), source (e.g. \"exchange 3\")\n\n"
-        f"Criterion names must match exactly: {', '.join(c['criterion_name'] for c in criteria)}"
+        f"Criterion names must match exactly: {', '.join(criteria_names)}"
     )
 
     api_key = os.getenv("ANTHROPIC_API_KEY", "")
@@ -518,16 +295,12 @@ def generate_session_summary(student_id: int, assignment_id: int) -> dict:
     except Exception as exc:
         result = _fallback_summary(str(exc))
 
-    # Post-process: replace any third-person "student" references with second-person "you"
-    import re
-
     def _to_second_person(text: str) -> str:
         if not isinstance(text, str):
             return text
         text = re.sub(r'\bThe student\b', 'You', text)
         text = re.sub(r'\bthe student\b', 'you', text)
         text = re.sub(r'\bStudent\b', 'You', text)
-        # Only replace standalone "student" not inside compound words
         text = re.sub(r'\bstudent\b', 'you', text)
         return text
 
@@ -538,7 +311,6 @@ def generate_session_summary(student_id: int, assignment_id: int) -> dict:
     for t in result.get("threads", []):
         t["text"] = _to_second_person(t.get("text", ""))
 
-    # Augment with per-exchange data for the exchange map
     result["exchanges"] = [
         {
             "exchange_number": ex.exchange_number,

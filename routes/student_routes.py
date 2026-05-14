@@ -6,7 +6,7 @@ from flask_login import current_user
 from extensions import db
 from models.models import Assignment, Course, Grade, InstructorFeedback, Output, PromptExchange, Reflection, ReflectionConfig, SessionSummary, Student
 from services.ai_service import detect_concept_usage, get_ai_response, suggest_discussion_points
-from services.archetype_service import ARCHETYPES, build_system_prompt, generate_session_summary
+from services.archetype_service import build_system_prompt, generate_session_summary
 from config import MODALITY_SECTIONS, DEFAULT_REFLECTION_QUESTIONS
 
 student_bp = Blueprint("student", __name__, url_prefix="/student")
@@ -163,15 +163,12 @@ def prompting():
         student_id=student.id, assignment_id=assignment.id
     ).first()
 
-    archetype_key = getattr(assignment, "archetype", None) or "challenger"
-    archetype_data = ARCHETYPES.get(archetype_key, ARCHETYPES["challenger"])
-
     exchange_count = len(exchanges)
     phase_1_end = getattr(assignment, "phase_1_end", 3) or 3
     phase_2_end = getattr(assignment, "phase_2_end", 6) or 6
-    if exchange_count <= phase_1_end:
+    if exchange_count < phase_1_end:
         current_phase = 1
-    elif exchange_count <= phase_2_end:
+    elif exchange_count < phase_2_end:
         current_phase = 2
     else:
         current_phase = 3
@@ -190,7 +187,6 @@ def prompting():
         has_output=has_output,
         has_reflection=has_reflection,
         feedback=feedback,
-        archetype_data=archetype_data,
         current_phase=current_phase,
         phase_1_end=phase_1_end,
         phase_2_end=phase_2_end,
