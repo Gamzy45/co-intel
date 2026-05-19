@@ -133,11 +133,71 @@ def prompting():
             db.session.add(exchange)
             db.session.commit()
 
+            # Compute per-phase stats. Guarded in a separate try so a stat
+            # failure never blocks the exchange — the commit already succeeded.
+            sid = student.id
+            aid = assignment.id
+            p1  = fresh_assignment.phase_1_end or 3
+            p2  = fresh_assignment.phase_2_end or 6
+
+            current_phase                  = 'inquire'
+            exchanges_in_current_phase     = 0
+            pushback_count_in_phase        = 0
+            student_word_count             = len(student_message.split())
+            max_student_words_in_phase     = 0
+            substantive_responses_in_phase = 0
+
+            try:
+                if exchange_number <= p1:
+                    current_phase = 'inquire'
+                    phase_exchanges = PromptExchange.query.filter(
+                        PromptExchange.student_id == sid,
+                        PromptExchange.assignment_id == aid,
+                        PromptExchange.exchange_number <= p1,
+                    ).all()
+                elif exchange_number <= p2:
+                    current_phase = 'collaborate'
+                    phase_exchanges = PromptExchange.query.filter(
+                        PromptExchange.student_id == sid,
+                        PromptExchange.assignment_id == aid,
+                        PromptExchange.exchange_number > p1,
+                        PromptExchange.exchange_number <= p2,
+                    ).all()
+                else:
+                    current_phase = 'evaluate'
+                    phase_exchanges = PromptExchange.query.filter(
+                        PromptExchange.student_id == sid,
+                        PromptExchange.assignment_id == aid,
+                        PromptExchange.exchange_number > p2,
+                    ).all()
+
+                phase_msgs = [
+                    ex.student_message for ex in phase_exchanges
+                    if ex.student_message
+                ]
+                exchanges_in_current_phase     = len(phase_exchanges)
+                pushback_count_in_phase        = sum(
+                    1 for ex in phase_exchanges if ex.has_pushback
+                )
+                word_counts                    = [len(m.split()) for m in phase_msgs]
+                max_student_words_in_phase     = max(word_counts) if word_counts else 0
+                substantive_responses_in_phase = sum(
+                    1 for w in word_counts if w > 30
+                )
+            except Exception:
+                pass  # stat failure is non-fatal; zeroed defaults returned above
+
             return jsonify({
                 "ai_response": ai_text,
                 "concepts_applied": concepts_applied,
                 "has_pushback": has_pushback,
                 "exchange_number": exchange_number,
+                "current_phase": current_phase,
+                "exchanges_in_current_phase": exchanges_in_current_phase,
+                "pushback_count_in_phase": pushback_count_in_phase,
+                "student_word_count": student_word_count,
+                "max_student_words_in_phase": max_student_words_in_phase,
+                "substantive_responses_in_phase": substantive_responses_in_phase,
             })
 
         except Exception as exc:
@@ -166,12 +226,17 @@ def prompting():
     exchange_count = len(exchanges)
     phase_1_end = getattr(assignment, "phase_1_end", 3) or 3
     phase_2_end = getattr(assignment, "phase_2_end", 6) or 6
+    phase_3_end = getattr(assignment, "phase_3_end", 9) or 9
     if exchange_count < phase_1_end:
         current_phase = 1
     elif exchange_count < phase_2_end:
         current_phase = 2
     else:
         current_phase = 3
+
+    inquire_min     = phase_1_end
+    collaborate_min = max(phase_2_end - phase_1_end, 1)
+    evaluate_min    = max(phase_3_end - phase_2_end, 1)
 
     return render_template(
         "student/prompting.html",
@@ -190,6 +255,9 @@ def prompting():
         current_phase=current_phase,
         phase_1_end=phase_1_end,
         phase_2_end=phase_2_end,
+        inquire_min=inquire_min,
+        collaborate_min=collaborate_min,
+        evaluate_min=evaluate_min,
     )
 
 
@@ -258,15 +326,8 @@ def session_summary():
     if student is None:
         return jsonify({"error": "Student not found."}), 404
 
-    cached = SessionSummary.query.filter_by(
-        student_id=student.id, assignment_id=assignment.id
-    ).first()
-    if cached:
-        try:
-            return jsonify(json.loads(cached.summary_json))
-        except Exception:
-            pass
-
+    # Always regenerate fresh from all current exchanges so students see
+    # an up-to-date summary if they continue the conversation after reviewing.
     try:
         result = generate_session_summary(student.id, assignment.id)
         return jsonify(result)

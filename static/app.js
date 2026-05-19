@@ -115,9 +115,68 @@ async function submitReflectionForm(postUrl) {
 }
 
 /* ================================================================
+   Paste / cut restriction (students only)
+   Blocks paste and cut on all student-facing text inputs and
+   textareas. Instructors and dev accounts are unaffected because
+   USER_ROLE will not equal 'student' for those roles.
+   ================================================================ */
+function showPasteRestrictionMessage(field) {
+  // If the field lives inside a flex row (e.g. the chat input), insert the
+  // message after the row rather than inside it.
+  const anchor = field.closest(".chat-input-row") || field;
+
+  // Remove any existing restriction message attached to this anchor.
+  const existing = anchor.parentNode.querySelector(".paste-block-msg");
+  if (existing) {
+    clearTimeout(existing._hideTimer);
+    existing.remove();
+  }
+
+  const msg = document.createElement("div");
+  msg.className = "paste-block-msg";
+  msg.textContent = "Please type your response in your own words.";
+  msg.style.cssText =
+    "font-size:12px;color:var(--text-tertiary);margin-top:4px;opacity:1;transition:opacity .3s;";
+  anchor.insertAdjacentElement("afterend", msg);
+
+  msg._hideTimer = setTimeout(() => {
+    msg.style.opacity = "0";
+    setTimeout(() => msg.remove(), 300);
+  }, 2000);
+}
+
+function restrictPasteForStudents() {
+  if (typeof USER_ROLE === "undefined" || USER_ROLE !== "student") return;
+
+  // These fields on the login / registration page are always exempt.
+  const EXEMPT_IDS = new Set([
+    "code-input",
+    "first-name",
+    "last-initial",
+    "ret-first-name",
+    "ret-last-initial",
+  ]);
+
+  document
+    .querySelectorAll('input[type="text"], textarea')
+    .forEach((el) => {
+      if (EXEMPT_IDS.has(el.id) || el.dataset.pasteRestricted) return;
+      el.dataset.pasteRestricted = "1";
+      ["paste", "cut"].forEach((type) => {
+        el.addEventListener(type, (e) => {
+          e.preventDefault();
+          showPasteRestrictionMessage(el);
+        });
+      });
+    });
+}
+
+/* ================================================================
    DOMContentLoaded init
-   Auto-scrolls the chat on page load if a chat-wrap exists.
+   Auto-scrolls the chat on page load if a chat-wrap exists, and
+   applies paste/cut restrictions for student accounts.
    ================================================================ */
 document.addEventListener("DOMContentLoaded", () => {
   scrollChatToBottom();
+  restrictPasteForStudents();
 });

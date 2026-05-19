@@ -141,6 +141,7 @@
 
 </div><!-- /.app -->
 
+<script>const USER_ROLE = "{{ current_user.role if current_user.is_authenticated else '' }}";</script>
 <script src="{{ url_for('static', filename='app.js') }}"></script>
 {% if current_user.is_authenticated and current_user.is_dev %}
 <script>

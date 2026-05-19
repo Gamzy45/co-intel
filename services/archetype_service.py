@@ -320,17 +320,23 @@ def generate_session_summary(student_id: int, assignment_id: int) -> dict:
         for ex in exchanges
     ]
 
+    # Always delete any cached summary and create a fresh record so each
+    # click of "Review my session" reflects the full current conversation.
     existing = SessionSummary.query.filter_by(
         student_id=student_id, assignment_id=assignment_id
     ).first()
     if existing:
-        existing.summary_json = json.dumps(result)
-        existing.generated_at = datetime.utcnow()
-    else:
-        db.session.add(SessionSummary(
-            student_id=student_id,
-            assignment_id=assignment_id,
-            summary_json=json.dumps(result),
-        ))
+        db.session.delete(existing)
+        db.session.flush()
+
+    now = datetime.utcnow()
+    db.session.add(SessionSummary(
+        student_id=student_id,
+        assignment_id=assignment_id,
+        summary_json=json.dumps(result),
+        generated_at=now,
+    ))
     db.session.commit()
+
+    result["generated_at"] = now.strftime("%H:%M")
     return result

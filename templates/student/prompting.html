@@ -141,6 +141,31 @@
   .strip-desc { color:var(--text-tertiary); min-width:0; flex:1; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .strip-phase-label { font-size:11px; color:var(--text-tertiary); white-space:nowrap; flex-shrink:0; }
   .strip-phase-label.active { color:var(--course-accent, var(--accent)); font-weight:500; }
+
+  /* ── Phase expandable panel ──────────────────────────────── */
+  .scaffold-phase { cursor:pointer; user-select:none; transition:background .12s; }
+  .scaffold-phase:hover { background:var(--bg-surface); }
+  .phase-chevron { margin-left:auto; color:var(--text-tertiary); flex-shrink:0; transition:transform .25s ease; }
+  .phase-chevron.open { transform:rotate(180deg); }
+  .phase-panel-body { max-height:0; overflow:hidden; transition:max-height .3s cubic-bezier(.4,0,.2,1); }
+  .phase-panel-body.open { max-height:320px; border-top:1px solid var(--border); }
+  .phase-panel-inner { padding:10px 12px 12px; display:flex; gap:12px; align-items:flex-start; }
+  .phase-panel-left { flex:1; min-width:0; }
+  .phase-panel-phase-name {
+    font-size:10px; font-weight:500; color:var(--accent);
+    text-transform:uppercase; letter-spacing:.06em; margin-bottom:5px;
+  }
+  .phase-panel-desc { font-size:12px; color:var(--text-secondary); line-height:1.55; }
+  .phase-stat-tiles { display:flex; gap:6px; flex-shrink:0; }
+  .phase-stat-tile {
+    border:1px solid var(--border); border-radius:8px;
+    padding:8px 10px; background:var(--bg-primary); min-width:74px; text-align:center;
+  }
+  .phase-stat-val { font-size:22px; font-weight:500; color:var(--accent); line-height:1; margin-bottom:3px; }
+  .phase-stat-lbl { font-size:11px; color:var(--text-tertiary); line-height:1.3; }
+  .phase-prog-bar { height:3px; background:var(--border); border-radius:2px; margin-top:5px; overflow:hidden; }
+  .phase-prog-fill { height:100%; background:var(--accent); border-radius:2px; transition:width .3s ease; }
+
   /* Criteria panel */
   .scaffold-criteria {
     display:flex; align-items:center; gap:8px; flex-wrap:nowrap;
@@ -335,8 +360,8 @@
     </div>
   </div>
 
-  {# Phase indicator strip #}
-  <div class="scaffold-phase">
+  {# Phase indicator strip — clickable to open phase panel #}
+  <div class="scaffold-phase" onclick="togglePhasePanel()">
     <span class="strip-phase-label" id="strip-phase-inquire">Inquire 1–{{ phase_1_end }}</span>
     <span style="color:var(--border);font-size:10px;flex-shrink:0;">›</span>
     <span class="strip-phase-label" id="strip-phase-collaborate">Collaborate {{ phase_1_end + 1 }}–{{ phase_2_end }}</span>
@@ -346,6 +371,20 @@
     <span class="strip-exchange" id="strip-exchange-label">Exchange {{ exchange_count }} of {{ min_exchanges }} minimum</span>
     <span class="strip-sep"></span>
     <span class="strip-desc" id="strip-description"></span>
+    <svg id="phase-chevron" class="phase-chevron" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+      <polyline points="6 9 12 15 18 9"/>
+    </svg>
+  </div>
+
+  {# Phase expandable panel #}
+  <div id="phase-panel-body" class="phase-panel-body">
+    <div class="phase-panel-inner">
+      <div class="phase-panel-left">
+        <div class="phase-panel-phase-name" id="panel-phase-name"></div>
+        <div class="phase-panel-desc" id="panel-phase-desc"></div>
+      </div>
+      <div class="phase-stat-tiles" id="panel-stat-tiles"></div>
+    </div>
   </div>
 
   {# Compact criteria panel #}
@@ -585,6 +624,11 @@
   <div style="font-size:12px;color:var(--text-tertiary);margin-top:8px;">
     Use course knowledge to direct, challenge, and build on AI responses.
   </div>
+  {% if current_user.is_authenticated and current_user.role == 'student' %}
+  <div style="font-size:12px;color:var(--text-tertiary);margin-top:4px;">
+    Type your response in your own words. Paraphrasing a source is part of the thinking process.
+  </div>
+  {% endif %}
 </div>
 
 {# ── Review my session button (appears after min_exchanges) ── #}
@@ -622,8 +666,11 @@
   const conceptsRequired = {{ 'true' if assignment.concepts_required else 'false' }};
 
   /* ── Phase config ─────────────────────────────────────── */
-  const phase1End = {{ phase_1_end }};
-  const phase2End = {{ phase_2_end }};
+  const phase1End      = {{ phase_1_end }};
+  const phase2End      = {{ phase_2_end }};
+  const inquireMin     = {{ inquire_min }};
+  const collaborateMin = {{ collaborate_min }};
+  const evaluateMin    = {{ evaluate_min }};
 
   /* Universal criteria */
   const CRITERIA = [
@@ -663,6 +710,7 @@
   const nudgePhaseIndex = {1: 0, 2: 0, 3: 0};
   let activeCriterion = -1;
   let briefOpen = false;
+  let phasePanelOpen = false;
 
   /* ── Phase helpers ────────────────────────────────────── */
   function getCurrentPhase() {
@@ -687,6 +735,69 @@
     briefOpen = !briefOpen;
     document.getElementById('brief-body').classList.toggle('open', briefOpen);
     document.getElementById('brief-chevron').classList.toggle('open', briefOpen);
+  }
+
+  /* ── Phase panel ──────────────────────────────────────── */
+  function togglePhasePanel() {
+    phasePanelOpen = !phasePanelOpen;
+    document.getElementById('phase-panel-body').classList.toggle('open', phasePanelOpen);
+    document.getElementById('phase-chevron').classList.toggle('open', phasePanelOpen);
+  }
+
+  const PHASE_PANEL_NAMES = { inquire: 'Inquire', collaborate: 'Collaborate', evaluate: 'Evaluate' };
+  const PHASE_PANEL_DESCS = {
+    inquire:     'AI is drawing out and stress-testing your thinking through questions and challenges.',
+    collaborate: 'AI is building alongside you — contribute your own directions and make deliberate choices.',
+    evaluate:    'AI is giving you specific feedback on what you developed — engage honestly with what needs work.',
+  };
+
+  function buildStatTile(val, label, pct) {
+    const bar = pct !== undefined
+      ? `<div class="phase-prog-bar"><div class="phase-prog-fill" style="width:${pct}%"></div></div>`
+      : '';
+    return `<div class="phase-stat-tile"><div class="phase-stat-val">${val}</div><div class="phase-stat-lbl">${label}</div>${bar}</div>`;
+  }
+
+  function updatePhasePanel(data) {
+    const phase  = data.current_phase || 'inquire';
+    const inPhase = data.exchanges_in_current_phase || 0;
+    const pbPhase = data.pushback_count_in_phase || 0;
+    const maxW    = data.max_student_words_in_phase || 0;
+    const subst   = data.substantive_responses_in_phase || 0;
+
+    const nameEl  = document.getElementById('panel-phase-name');
+    const descEl  = document.getElementById('panel-phase-desc');
+    const tilesEl = document.getElementById('panel-stat-tiles');
+    if (!nameEl || !descEl || !tilesEl) return;
+
+    nameEl.textContent = PHASE_PANEL_NAMES[phase] || phase;
+    descEl.textContent = PHASE_PANEL_DESCS[phase] || '';
+
+    const phaseMin = phase === 'inquire' ? inquireMin
+                   : phase === 'collaborate' ? collaborateMin
+                   : evaluateMin;
+    const pct = phaseMin > 0 ? Math.min(100, Math.round(inPhase / phaseMin * 100)) : 0;
+
+    const stripLabel = document.getElementById('strip-exchange-label');
+    if (stripLabel) {
+      stripLabel.textContent = `${inPhase} of ${phaseMin} in ${PHASE_PANEL_NAMES[phase] || phase}`;
+    }
+
+    let tiles = '';
+    if (phase === 'inquire') {
+      tiles += buildStatTile(inPhase, 'exchanges in this phase', pct);
+      tiles += buildStatTile(pbPhase, 'times you pushed back');
+      tiles += buildStatTile(maxW, 'words in your longest response');
+    } else if (phase === 'collaborate') {
+      tiles += buildStatTile(inPhase, 'exchanges in this phase', pct);
+      tiles += buildStatTile(subst, 'substantive responses');
+      tiles += buildStatTile(maxW, 'words in your longest response');
+    } else {
+      tiles += buildStatTile(inPhase, 'exchanges in this phase', pct);
+      tiles += buildStatTile(pbPhase, 'revisions you identified');
+      tiles += buildStatTile(maxW, 'words in your longest response');
+    }
+    tilesEl.innerHTML = tiles;
   }
 
   /* ── Criteria panel ───────────────────────────────────── */
@@ -824,12 +935,14 @@
       appendUserMessage(text, data.exchange_number, data.concepts_applied, data.has_pushback);
       appendAiMessage(data.ai_response);
       scrollChatToBottom();
+      restrictPasteForStudents();
 
       exchangeCount = data.exchange_number;
       if (data.has_pushback) pushbackCount++;
 
       updatePhaseTrack();
       updatePhaseStrip();
+      try { updatePhasePanel(data); } catch (_) { /* non-fatal — stats only */ }
 
       // Update progress pills
       if (conceptsRequired) {
@@ -881,16 +994,16 @@
   });
 
   // ── Session summary ────────────────────────────────────────────────────────
-  let summaryLoaded = false;
-
+  // Regenerates on every click. If the card is already visible the contents
+  // are replaced in-place; otherwise the card is revealed and scrolled into view.
   async function loadSessionSummary() {
-    if (summaryLoaded) {
-      document.getElementById('session-summary-wrap').style.display = 'block';
-      document.getElementById('session-summary-wrap').scrollIntoView({ behavior: 'smooth' });
-      return;
-    }
-
     const wrap = document.getElementById('session-summary-wrap');
+    const btn  = document.getElementById('review-btn');
+    const alreadyVisible = wrap.style.display !== 'none';
+
+    btn.disabled = true;
+    btn.innerHTML = '<i class="ti ti-loader" style="font-size:13px;margin-right:4px;"></i> Generating summary…';
+
     wrap.style.display = 'block';
     wrap.innerHTML = `
       <div class="summary-card">
@@ -899,16 +1012,21 @@
           <div class="summary-loading-text">Analyzing your session…</div>
         </div>
       </div>`;
-    wrap.scrollIntoView({ behavior: 'smooth' });
+
+    if (!alreadyVisible) {
+      wrap.scrollIntoView({ behavior: 'smooth' });
+    }
 
     try {
       const resp = await fetch('{{ url_for("student.session_summary") }}');
       const data = await resp.json();
       if (!resp.ok) throw new Error(data.error || 'Could not load summary.');
       renderSessionSummary(data);
-      summaryLoaded = true;
     } catch (err) {
       wrap.innerHTML = `<div class="card" style="color:var(--text-orange);font-size:13px;padding:16px;">Could not load session summary: ${escHtml(err.message)}</div>`;
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="ti ti-chart-bar" style="font-size:13px;margin-right:4px;"></i> Review my session';
     }
   }
 
@@ -936,35 +1054,6 @@
 
   function renderSessionSummary(data) {
     const wrap = document.getElementById('session-summary-wrap');
-    const conceptScores = data.concept_scores || [];
-
-    let conceptTiles = '';
-    if (!conceptsRequired) {
-      conceptTiles = conceptScores.map(cs => {
-        const isStudent = cs.introduced_by === 'student';
-        return `
-          <div class="concept-tile ${isStudent ? 'student-tile' : ''}">
-            <div class="concept-tile-name">${escHtml(cs.concept_name || '')}</div>
-            <div class="concept-depth-bar"><div class="concept-depth-fill" style="width:${cs.depth_score || 0}%"></div></div>
-            <div class="concept-tile-meta">${escHtml(cs.introduced_by || '')} &middot; used ${cs.times_used || 0}×</div>
-          </div>`;
-      }).join('');
-      if (!conceptTiles) conceptTiles = `<div style="font-size:12px;color:var(--text-tertiary);">No concepts detected yet.</div>`;
-    } else {
-      const scoreMap = {};
-      conceptScores.forEach(cs => { scoreMap[cs.concept_name] = cs; });
-      requiredConcepts.forEach(name => {
-        const cs = scoreMap[name] || {};
-        const isStudent = cs.introduced_by === 'student';
-        const isUsed = !!cs.times_used;
-        conceptTiles += `
-          <div class="concept-tile ${isStudent ? 'student-tile' : ''} ${!isUsed ? 'unused-tile' : ''}">
-            <div class="concept-tile-name">${escHtml(name)}</div>
-            <div class="concept-depth-bar"><div class="concept-depth-fill" style="width:${cs.depth_score || 0}%"></div></div>
-            <div class="concept-tile-meta">${isUsed ? (escHtml(cs.introduced_by || '') + ' &middot; used ' + (cs.times_used || 0) + '×') : 'not yet applied'}</div>
-          </div>`;
-      });
-    }
 
     const momentIcons   = { strongest: 'icon-strongest', pushback: 'icon-pushback', gap: 'icon-gap' };
     const momentSymbols = { strongest: '★', pushback: '↩', gap: '○' };
@@ -983,43 +1072,29 @@
         <div class="criteria-score-name">${escHtml(cs.criterion_name || '')}</div>
         ${levelDots(cs.level || 'emerging')}
         ${levelBadge(cs.level || 'emerging')}
+        <div style="font-size:11px;color:var(--text-tertiary);margin-bottom:4px;">${cs.score != null ? cs.score + ' / 100' : ''}</div>
         <div class="criteria-evidence">${escHtml(cs.evidence || '')}</div>
       </div>`).join('');
 
-    const pct = data.student_idea_percentage || 0;
+    const threads = (data.threads || []).map((t, i) => `
+      <div class="thread-row">
+        <div class="thread-num">${i + 1}</div>
+        <div>
+          <div class="thread-text">${escHtml(t.text || '')}</div>
+          <div class="thread-source">${escHtml(t.source || '')}</div>
+        </div>
+      </div>`).join('');
+
+    const generatedAt = data.generated_at
+      ? `<div style="font-size:11px;color:var(--text-tertiary);margin-bottom:12px;">Updated at ${escHtml(data.generated_at)}</div>`
+      : '';
 
     wrap.innerHTML = `
       <div class="summary-card">
         <div class="summary-section">
-          <div class="summary-section-title">Session at a glance</div>
-          <div class="metric-tiles">
-            <div class="metric-tile"><div class="metric-tile-val">${data.exchange_count || 0}</div><div class="metric-tile-label">Exchanges</div></div>
-            <div class="metric-tile"><div class="metric-tile-val">${data.phase_reached || 1}</div><div class="metric-tile-label">Phase reached</div></div>
-            <div class="metric-tile"><div class="metric-tile-val">${data.pushback_count || 0}</div><div class="metric-tile-label">Pushbacks</div></div>
-            <div class="metric-tile"><div class="metric-tile-val">${pct}%</div><div class="metric-tile-label">Your ideas</div></div>
-          </div>
-        </div>
-
-        <div class="summary-section">
+          ${generatedAt}
           <div class="summary-section-title">Criteria at a glance</div>
           <div class="criteria-score-grid">${criteriaScores || '<div style="font-size:12px;color:var(--text-tertiary);">No criteria scores available.</div>'}</div>
-        </div>
-
-        <div class="summary-section">
-          <div class="summary-section-title">Idea contribution</div>
-          <div class="idea-bar-wrap">
-            <div class="idea-bar-student" style="width:${pct}%"></div>
-            <div class="idea-bar-ai" style="width:${100 - pct}%"></div>
-          </div>
-          <div class="idea-bar-legend">
-            <span><span class="legend-dot legend-dot-orange"></span>You (${pct}%)</span>
-            <span><span class="legend-dot legend-dot-blue"></span>AI (${100 - pct}%)</span>
-          </div>
-        </div>
-
-        <div class="summary-section">
-          <div class="summary-section-title">${conceptsRequired ? 'Concept coverage' : 'Concepts you applied'}</div>
-          <div class="concept-tile-grid">${conceptTiles}</div>
         </div>
 
         <div class="summary-section">
@@ -1027,8 +1102,14 @@
           ${keyMoments || '<div style="font-size:12px;color:var(--text-tertiary);">No key moments identified.</div>'}
         </div>
 
+        <div class="summary-section">
+          <div class="summary-section-title">Three threads to carry forward</div>
+          ${threads || '<div style="font-size:12px;color:var(--text-tertiary);">No threads identified.</div>'}
+        </div>
+
         <div class="summary-footer">
           <a href="{{ url_for('student.assignment') }}" class="btn btn-primary">Continue to assignment</a>
+          <button class="btn" onclick="window.print()">Save notes</button>
           <button class="btn" onclick="document.getElementById('session-summary-wrap').style.display='none'">Close</button>
         </div>
       </div>`;
