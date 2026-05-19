@@ -4,10 +4,11 @@ from datetime import datetime
 from flask import Blueprint, jsonify, redirect, render_template, request, session, url_for
 from flask_login import current_user
 from extensions import db
-from models.models import Assignment, Course, Grade, InstructorFeedback, Output, PromptExchange, Reflection, ReflectionConfig, SessionSummary, Student
+from models.models import Assignment, Course, Grade, InstructorFeedback, Output, PromptExchange, Reflection, SessionSummary, Student
 from services.ai_service import detect_concept_usage, get_ai_response, suggest_discussion_points
 from services.archetype_service import build_system_prompt, generate_session_summary
 from config import MODALITY_SECTIONS, DEFAULT_REFLECTION_QUESTIONS
+
 
 student_bp = Blueprint("student", __name__, url_prefix="/student")
 
@@ -261,65 +262,6 @@ def prompting():
     )
 
 
-@student_bp.route("/assignment", methods=["GET", "POST"])
-def assignment():
-    student, assignment, course = _get_context()
-
-    exchange_count = PromptExchange.query.filter_by(
-        student_id=student.id, assignment_id=assignment.id
-    ).count()
-
-    existing_output = Output.query.filter_by(
-        student_id=student.id, assignment_id=assignment.id
-    ).first()
-
-    if request.method == "POST":
-        data = request.get_json(silent=True) or {}
-        content = data.get("content", "").strip()
-
-        if not content:
-            return jsonify({"error": "Please write something before saving."}), 400
-
-        if existing_output and existing_output.is_submitted and not existing_output.is_reopened:
-            return jsonify({"error": "Cannot edit a submitted assignment."}), 403
-
-        modality = assignment.modality or ""
-
-        if existing_output:
-            existing_output.modality = modality
-            existing_output.content = content
-            existing_output.content_sections = None
-            existing_output.analysis_json = None
-            existing_output.analysis_generated_at = None
-        else:
-            existing_output = Output(
-                student_id=student.id,
-                assignment_id=assignment.id,
-                modality=modality,
-                content=content,
-            )
-            db.session.add(existing_output)
-
-        db.session.commit()
-        return jsonify({"success": True})
-
-    grade = Grade.query.filter_by(
-        student_id=student.id, assignment_id=assignment.id
-    ).first()
-
-    return render_template(
-        "student/assignment.html",
-        student=student,
-        assignment=assignment,
-        course=course,
-        existing_output=existing_output,
-        exchange_count=exchange_count,
-        min_exchanges=course.min_exchanges,
-        unlocked=exchange_count >= course.min_exchanges,
-        grade=grade,
-    )
-
-
 @student_bp.route("/session-summary")
 def session_summary():
     student, assignment, course = _get_context()
@@ -405,18 +347,11 @@ def reflection():
         db.session.commit()
         return jsonify({"success": True})
 
-    cfg = ReflectionConfig.query.filter_by(assignment_id=assignment.id).first()
-    if cfg:
-        questions = {
-            "question_1": cfg.question_1,
-            "question_2": cfg.question_2,
-            "question_3": cfg.question_3,
-            "hint_1": cfg.hint_1 or "",
-            "hint_2": cfg.hint_2 or "",
-            "hint_3": cfg.hint_3 or "",
-        }
-    else:
-        questions = {k: (v or "") for k, v in DEFAULT_REFLECTION_QUESTIONS.items()}
+    questions = {
+        "question_1": getattr(assignment, "reflection_q1", None) or DEFAULT_REFLECTION_QUESTIONS["question_1"],
+        "question_2": getattr(assignment, "reflection_q2", None) or DEFAULT_REFLECTION_QUESTIONS["question_2"],
+        "question_3": getattr(assignment, "reflection_q3", None) or DEFAULT_REFLECTION_QUESTIONS["question_3"],
+    }
 
     grade = Grade.query.filter_by(
         student_id=student.id, assignment_id=assignment.id
@@ -431,69 +366,6 @@ def reflection():
         questions=questions,
         grade=grade,
     )
-
-
-@student_bp.route("/assignment/submit", methods=["POST"])
-def assignment_submit():
-    student, assignment, course = _get_context()
-    data = request.get_json(silent=True) or {}
-    content = data.get("content", "").strip()
-
-    output = Output.query.filter_by(
-        student_id=student.id, assignment_id=assignment.id
-    ).first()
-
-    if not content and (not output or not output.content):
-        return jsonify({"error": "Please write something before submitting."}), 400
-
-    now = datetime.utcnow()
-    if output:
-        if content:
-            output.content = content
-            output.analysis_json = None
-            output.analysis_generated_at = None
-        output.is_submitted = True
-        output.submitted_at = now
-        output.is_reopened = False
-    else:
-        output = Output(
-            student_id=student.id,
-            assignment_id=assignment.id,
-            modality=assignment.modality or "",
-            content=content,
-            submitted_at=now,
-            is_submitted=True,
-        )
-        db.session.add(output)
-
-    db.session.commit()
-    return jsonify({"success": True, "submitted_at": now.strftime("%b %d at %H:%M")})
-
-
-@student_bp.route("/assignment/resubmit", methods=["POST"])
-def assignment_resubmit():
-    student, assignment, course = _get_context()
-    data = request.get_json(silent=True) or {}
-    content = data.get("content", "").strip()
-
-    output = Output.query.filter_by(
-        student_id=student.id, assignment_id=assignment.id
-    ).first()
-
-    if not output:
-        return jsonify({"error": "No assignment found."}), 404
-
-    now = datetime.utcnow()
-    if content:
-        output.content = content
-        output.analysis_json = None
-        output.analysis_generated_at = None
-    output.is_submitted = True
-    output.is_reopened = False
-    output.resubmitted_at = now
-    output.submitted_at = now
-    db.session.commit()
-    return jsonify({"success": True, "submitted_at": now.strftime("%b %d at %H:%M")})
 
 
 @student_bp.route("/reflection/submit", methods=["POST"])

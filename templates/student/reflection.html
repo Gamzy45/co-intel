@@ -3,9 +3,24 @@
 
 {% block page_styles %}
 <style>
+  /* Phase track */
+  .phase-track { display:flex; align-items:center; gap:0; }
+  .phase-step  {
+    display:flex; align-items:center; gap:6px; font-size:11px;
+    color:var(--text-tertiary); padding:3px 8px; border-radius:6px;
+    transition:color .25s, background .25s;
+  }
+  .phase-step:first-child { padding-left:4px; }
+  .phase-dot   { width:6px; height:6px; border-radius:50%; background:var(--border); flex-shrink:0; }
+  .phase-check { display:none; font-size:11px; line-height:1; }
+  .phase-step.done   .phase-dot  { display:none; }
+  .phase-step.done   .phase-check { display:inline; color:var(--text-tertiary); }
+  .phase-step.active .phase-dot  { background:var(--course-accent); }
+  .phase-step.active { color:var(--course-accent); font-weight:500; background:var(--bg-orange-light); }
+  .phase-sep   { width:16px; height:1px; background:var(--border); flex-shrink:0; }
+
   .q-card { margin-bottom:12px; }
   .q-label { font-size:16px; font-weight:500; color:var(--text-primary); margin-bottom:6px; }
-  .q-hint  { font-size:14px; color:var(--text-tertiary); line-height:1.6; margin-bottom:10px; }
   .q-answer { font-size:15px; color:var(--text-primary); line-height:1.75; white-space:pre-wrap; }
   .action-row { display:flex; gap:8px; justify-content:flex-end; margin-top:16px; align-items:center; }
   .save-status { font-size:11px; color:var(--pill-green-text); margin-right:auto; display:none; }
@@ -27,11 +42,6 @@
     <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
     Dialogic prompting
   </a>
-  <a href="{{ url_for('student.assignment') }}"
-     class="sidebar-item{% if request.endpoint == 'student.assignment' %} active{% endif %}">
-    <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-    Assignment
-  </a>
   <a href="{{ url_for('student.reflection') }}"
      class="sidebar-item{% if request.endpoint == 'student.reflection' %} active{% endif %}">
     <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
@@ -44,6 +54,26 @@
 {% block content %}
 {% set is_submitted = existing is not none and existing.is_submitted %}
 {% set is_reopened  = existing is not none and existing.is_submitted and existing.is_reopened %}
+
+<div style="margin-bottom:18px;">
+  <div class="phase-track">
+    <div class="phase-step done">
+      <span class="phase-dot"></span><span class="phase-check">✓</span> Inquire
+    </div>
+    <div class="phase-sep"></div>
+    <div class="phase-step done">
+      <span class="phase-dot"></span><span class="phase-check">✓</span> Collaborate
+    </div>
+    <div class="phase-sep"></div>
+    <div class="phase-step done">
+      <span class="phase-dot"></span><span class="phase-check">✓</span> Evaluate
+    </div>
+    <div class="phase-sep"></div>
+    <div class="phase-step active">
+      <span class="phase-dot"></span><span class="phase-check">✓</span> Reflect
+    </div>
+  </div>
+</div>
 
 <div style="margin-bottom:16px;">
   <h1 class="page-title">Reflection</h1>
@@ -95,19 +125,16 @@
 <!-- ── Editable view (not submitted or reopened) ── -->
 <div class="card q-card">
   <div class="q-label">Q1 — {{ questions['question_1'] }}</div>
-  {% if questions['hint_1'] %}<div class="q-hint">{{ questions['hint_1'] }}</div>{% endif %}
   <textarea id="q1" rows="5" placeholder="Write your response here…">{{ existing.question_1 if existing else '' }}</textarea>
 </div>
 
 <div class="card q-card">
   <div class="q-label">Q2 — {{ questions['question_2'] }}</div>
-  {% if questions['hint_2'] %}<div class="q-hint">{{ questions['hint_2'] }}</div>{% endif %}
   <textarea id="q2" rows="5" placeholder="Write your response here…">{{ existing.question_2 if existing else '' }}</textarea>
 </div>
 
 <div class="card q-card">
   <div class="q-label">Q3 — {{ questions['question_3'] }}</div>
-  {% if questions['hint_3'] %}<div class="q-hint">{{ questions['hint_3'] }}</div>{% endif %}
   <textarea id="q3" rows="5" placeholder="Write your response here…">{{ existing.question_3 if existing else '' }}</textarea>
 </div>
 

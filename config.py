@@ -1,10 +1,7 @@
 DEFAULT_REFLECTION_QUESTIONS = {
-    "question_1": "How did your course knowledge shape the way you directed AI in this assignment?",
-    "question_2": "How did working alongside AI change or deepen your own thinking about this topic?",
-    "question_3": "Where did you disagree with AI, and what personal knowledge or experience led you to challenge it?",
-    "hint_1": "Choose one specific moment from your prompting log and explain what you knew from class that led you to steer AI in that direction.",
-    "hint_2": "Describe a moment where AI's response surprised you or helped you see something differently.",
-    "hint_3": "Identify a moment of pushback and explain what you brought to that moment that AI could not have generated on its own.",
+    "question_1": "Looking back at your conversation, what is the most important idea you developed that you want to carry into your assignment?",
+    "question_2": "Where did your own knowledge or course concepts most change the direction of the conversation?",
+    "question_3": "What is your plan for the assignment — what will you argue, design, or create? And which specific moment in your conversation most directly shaped that plan?",
 }
 
 MODALITY_SECTIONS = {

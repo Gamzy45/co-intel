@@ -211,22 +211,21 @@
 <!-- Reflection questions configuration -->
 <div class="card" style="margin-bottom:12px;">
   <div style="font-size:12px;font-weight:500;color:var(--text-secondary);margin-bottom:12px;">Reflection questions</div>
-  {% for n in [1, 2, 3] %}
-  <div class="cfg-field" style="border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:8px;background:var(--bg-surface);">
-    <div style="font-size:10px;font-weight:600;color:var(--text-orange);margin-bottom:6px;">QUESTION {{ n }}</div>
-    <div class="cfg-field" style="margin-bottom:6px;">
-      <label class="cfg-label">Question text</label>
-      <textarea id="rq{{ n }}-question" class="cfg-textarea" rows="2">{{ reflection_config['question_' ~ n] }}</textarea>
-    </div>
-    <div class="cfg-field" style="margin-bottom:0;">
-      <label class="cfg-label">Hint (optional)</label>
-      <input type="text" id="rq{{ n }}-hint" class="cfg-input" value="{{ reflection_config['hint_' ~ n] }}" />
-    </div>
+  <div class="cfg-field">
+    <label class="cfg-label">Question 1</label>
+    <textarea id="rq1-question" class="cfg-textarea" rows="2">{{ assignment.reflection_q1 or '' }}</textarea>
   </div>
-  {% endfor %}
+  <div class="cfg-field">
+    <label class="cfg-label">Question 2</label>
+    <textarea id="rq2-question" class="cfg-textarea" rows="2">{{ assignment.reflection_q2 or '' }}</textarea>
+  </div>
+  <div class="cfg-field">
+    <label class="cfg-label">Question 3</label>
+    <textarea id="rq3-question" class="cfg-textarea" rows="2">{{ assignment.reflection_q3 or '' }}</textarea>
+  </div>
   <div style="display:flex;align-items:center;gap:10px;margin-top:4px;">
-    <button class="btn btn-primary" onclick="saveReflectionConfig()">Save questions</button>
-    <span id="rq-status" style="display:none;font-size:11px;color:var(--pill-green-text);">&#10003; Saved</span>
+    <button class="btn" onclick="saveReflectionQuestions()">Save reflection questions</button>
+    <span id="rq-status" style="display:none;font-size:11px;color:var(--pill-green-text);">&#10003; Reflection questions saved</span>
     <span id="rq-error" style="display:none;font-size:11px;color:var(--text-orange);"></span>
   </div>
 </div>
@@ -268,8 +267,9 @@
 
 {% block page_scripts %}
 <script>
-  const SAVE_BRIEF_URL   = '{{ url_for("instructor.save_brief",    assignment_id=assignment.id) }}';
-  const SAVE_AI_URL      = '{{ url_for("instructor.save_ai_config", assignment_id=assignment.id) }}';
+  const SAVE_BRIEF_URL             = '{{ url_for("instructor.save_brief",                assignment_id=assignment.id) }}';
+  const SAVE_AI_URL                = '{{ url_for("instructor.save_ai_config",             assignment_id=assignment.id) }}';
+  const SAVE_REFLECTION_QS_URL     = '{{ url_for("instructor.save_reflection_questions",  assignment_id=assignment.id) }}';
 
   let selectedIntensity = document.querySelector('#intensity-ctrl .seg-btn.active')?.dataset.value || 'balanced';
 
@@ -338,21 +338,18 @@
     }
   }
 
-  async function saveReflectionConfig() {
+  async function saveReflectionQuestions() {
     const statusEl = document.getElementById('rq-status');
     const errorEl  = document.getElementById('rq-error');
     statusEl.style.display = 'none';
     errorEl.style.display  = 'none';
     const body = {
-      question_1: document.getElementById('rq1-question').value.trim(),
-      question_2: document.getElementById('rq2-question').value.trim(),
-      question_3: document.getElementById('rq3-question').value.trim(),
-      hint_1: document.getElementById('rq1-hint').value.trim(),
-      hint_2: document.getElementById('rq2-hint').value.trim(),
-      hint_3: document.getElementById('rq3-hint').value.trim(),
+      reflection_q1: document.getElementById('rq1-question').value.trim(),
+      reflection_q2: document.getElementById('rq2-question').value.trim(),
+      reflection_q3: document.getElementById('rq3-question').value.trim(),
     };
     try {
-      const resp = await fetch('{{ url_for("instructor.reflection_config") }}', {
+      const resp = await fetch(SAVE_REFLECTION_QS_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
         body: JSON.stringify(body),

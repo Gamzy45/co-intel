@@ -334,6 +334,9 @@ def _migrate():
         ("reflections", "is_reopened",               "BOOLEAN NOT NULL DEFAULT 0"),
         ("reflections", "reopened_at",               "DATETIME"),
         ("reflections", "resubmitted_at",            "DATETIME"),
+        ("assignments", "reflection_q1",             "TEXT NOT NULL DEFAULT 'Looking back at your conversation, what is the most important idea you developed that you want to carry into your assignment?'"),
+        ("assignments", "reflection_q2",             "TEXT NOT NULL DEFAULT 'Where did your own knowledge or course concepts most change the direction of the conversation?'"),
+        ("assignments", "reflection_q3",             "TEXT NOT NULL DEFAULT 'What is your plan for the assignment — what will you argue, design, or create? And which specific moment in your conversation most directly shaped that plan?'"),
     ]
     with db.engine.connect() as conn:
         for table, col, col_def in new_cols:
@@ -415,11 +418,18 @@ def _migrate():
         except Exception:
             pass
 
+        # Delete ReflectionConfig records — questions now stored directly on Assignment model
+        try:
+            conn.execute(text("DELETE FROM reflection_configs"))
+            conn.commit()
+        except Exception:
+            pass
+
 
 def _seed():
     from models.models import (
         Course, Assignment, Student, User, AccessCode,
-        Reflection, Output, ReflectionConfig,
+        Reflection, Output,
     )
     from config import DEFAULT_REFLECTION_QUESTIONS
 
@@ -466,6 +476,9 @@ def _seed():
         intensity="balanced",
         phase_1_end=3, phase_2_end=6, phase_3_end=9,
         supplementary_instructions="",
+        reflection_q1=DEFAULT_REFLECTION_QUESTIONS["question_1"],
+        reflection_q2=DEFAULT_REFLECTION_QUESTIONS["question_2"],
+        reflection_q3=DEFAULT_REFLECTION_QUESTIONS["question_3"],
     )
     db.session.add(nms_assignment)
     db.session.flush()
@@ -508,23 +521,15 @@ def _seed():
         intensity="supportive",
         phase_1_end=3, phase_2_end=6, phase_3_end=9,
         supplementary_instructions="",
+        reflection_q1=DEFAULT_REFLECTION_QUESTIONS["question_1"],
+        reflection_q2=DEFAULT_REFLECTION_QUESTIONS["question_2"],
+        reflection_q3=DEFAULT_REFLECTION_QUESTIONS["question_3"],
     )
     db.session.add(ic_assignment)
     db.session.flush()
 
     for name, email in [("Alex M.", "alex.m.ic@cointel.edu"), ("Jamie L.", "jamie.l.ic@cointel.edu"), ("Riley K.", "riley.k.ic@cointel.edu")]:
         db.session.add(Student(name=name, email=email, course_id=ic.id))
-
-    for assignment_id in [nms_assignment.id, ic_assignment.id]:
-        db.session.add(ReflectionConfig(
-            assignment_id=assignment_id,
-            question_1=DEFAULT_REFLECTION_QUESTIONS["question_1"],
-            question_2=DEFAULT_REFLECTION_QUESTIONS["question_2"],
-            question_3=DEFAULT_REFLECTION_QUESTIONS["question_3"],
-            hint_1=DEFAULT_REFLECTION_QUESTIONS["hint_1"],
-            hint_2=DEFAULT_REFLECTION_QUESTIONS["hint_2"],
-            hint_3=DEFAULT_REFLECTION_QUESTIONS["hint_3"],
-        ))
 
     db.session.commit()
     _seed_access_codes()

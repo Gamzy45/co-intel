@@ -19,12 +19,12 @@
   .phase-step.active { color:var(--course-accent); font-weight:500; background:var(--bg-orange-light); }
   .phase-sep   { width:16px; height:1px; background:var(--border); flex-shrink:0; }
 
-  #phase-orient.done    { background:#FEF3E2; color:#92580a; }
-  #phase-orient.done    .phase-check { color:#92580a; }
-  #phase-challenge.done { background:var(--bg-orange-light); color:var(--course-accent-text, var(--text-orange)); }
-  #phase-challenge.done .phase-check { color:var(--course-accent-text, var(--text-orange)); }
-  #phase-synthesize.done { background:#E6F7F5; color:#0A7A6E; }
-  #phase-synthesize.done .phase-check { color:#0A7A6E; }
+  #phase-inquire.done    { background:#FEF3E2; color:#92580a; }
+  #phase-inquire.done    .phase-check { color:#92580a; }
+  #phase-collaborate.done { background:var(--bg-orange-light); color:var(--course-accent-text, var(--text-orange)); }
+  #phase-collaborate.done .phase-check { color:var(--course-accent-text, var(--text-orange)); }
+  #phase-evaluate.done { background:#E6F7F5; color:#0A7A6E; }
+  #phase-evaluate.done .phase-check { color:#0A7A6E; }
   #phase-reflect.done   { background:#EAFAF1; color:#1a7a45; }
   #phase-reflect.done   .phase-check { color:#1a7a45; }
 
@@ -315,11 +315,6 @@
     <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
     Dialogic prompting
   </a>
-  <a href="{{ url_for('student.assignment') }}"
-     class="sidebar-item{% if request.endpoint == 'student.assignment' %} active{% endif %}">
-    <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-    Assignment
-  </a>
   <a href="{{ url_for('student.reflection') }}"
      class="sidebar-item{% if request.endpoint == 'student.reflection' %} active{% endif %}">
     <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
@@ -500,27 +495,25 @@
 {% endif %}
 
 {# ── Workflow phase track ── #}
-{% set challenge_done = exchange_count >= min_exchanges and pushback_count >= 1 %}
-{% set orient_cls    = 'done' if exchange_count >= 1 else 'active' %}
-{% set challenge_cls = 'done' if challenge_done else ('active' if exchange_count >= 1 else '') %}
-{% set synthesize_cls = 'done' if has_output else ('active' if challenge_done else '') %}
-{% set reflect_cls   = 'done' if has_reflection else ('active' if has_output else '') %}
+{% set inquire_cls    = 'done' if current_phase > 1 else 'active' %}
+{% set collaborate_cls = 'done' if current_phase > 2 else ('active' if current_phase == 2 else '') %}
+{% set evaluate_cls   = 'active' if current_phase == 3 else '' %}
 
 <div style="margin-bottom:18px;">
   <div class="phase-track">
-    <div class="phase-step {{ orient_cls }}" id="phase-orient">
-      <span class="phase-dot"></span><span class="phase-check">✓</span> Orient
+    <div class="phase-step {{ inquire_cls }}" id="phase-inquire">
+      <span class="phase-dot"></span><span class="phase-check">✓</span> Inquire
     </div>
     <div class="phase-sep"></div>
-    <div class="phase-step {{ challenge_cls }}" id="phase-challenge">
-      <span class="phase-dot"></span><span class="phase-check">✓</span> Challenge
+    <div class="phase-step {{ collaborate_cls }}" id="phase-collaborate">
+      <span class="phase-dot"></span><span class="phase-check">✓</span> Collaborate
     </div>
     <div class="phase-sep"></div>
-    <div class="phase-step {{ synthesize_cls }}" id="phase-synthesize">
-      <span class="phase-dot"></span><span class="phase-check">✓</span> Synthesize
+    <div class="phase-step {{ evaluate_cls }}" id="phase-evaluate">
+      <span class="phase-dot"></span><span class="phase-check">✓</span> Evaluate
     </div>
     <div class="phase-sep"></div>
-    <div class="phase-step {{ reflect_cls }}" id="phase-reflect">
+    <div class="phase-step" id="phase-reflect">
       <span class="phase-dot"></span><span class="phase-check">✓</span> Reflect
     </div>
   </div>
@@ -849,16 +842,16 @@
 
   /* ── Workflow phase track ─────────────────────────────── */
   function updatePhaseTrack() {
-    const challengeDone = exchangeCount >= minExchanges && pushbackCount >= 1;
+    const phase = getCurrentPhase();
     const states = {
-      orient:    exchangeCount >= 1 ? 'done' : 'active',
-      challenge: exchangeCount === 0 ? '' : challengeDone ? 'done' : 'active',
-      synthesize: challengeDone ? (hasOutput ? 'done' : 'active') : '',
-      reflect:    hasOutput ? (hasReflection ? 'done' : 'active') : '',
+      inquire:    phase > 1 ? 'done' : 'active',
+      collaborate: phase > 2 ? 'done' : phase === 2 ? 'active' : '',
+      evaluate:   phase === 3 ? 'active' : '',
+      reflect:    '',
     };
     for (const [name, state] of Object.entries(states)) {
       const el = document.getElementById('phase-' + name);
-      el.className = 'phase-step' + (state ? ' ' + state : '');
+      if (el) el.className = 'phase-step' + (state ? ' ' + state : '');
     }
   }
 
@@ -1108,7 +1101,7 @@
         </div>
 
         <div class="summary-footer">
-          <a href="{{ url_for('student.assignment') }}" class="btn btn-primary">Continue to assignment</a>
+          <a href="{{ url_for('student.reflection') }}" class="btn btn-primary">Go to reflection</a>
           <button class="btn" onclick="window.print()">Save notes</button>
           <button class="btn" onclick="document.getElementById('session-summary-wrap').style.display='none'">Close</button>
         </div>

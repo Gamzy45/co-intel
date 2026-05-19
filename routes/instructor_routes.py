@@ -123,18 +123,19 @@ def _student_row(student, assignment):
 
 
 def _get_reflection_config(assignment_id):
-    """Return reflection config as a dict, falling back to defaults."""
-    cfg = ReflectionConfig.query.filter_by(assignment_id=assignment_id).first()
-    if cfg:
+    """Return reflection questions as a dict, reading from Assignment model."""
+    assignment = Assignment.query.get(assignment_id)
+    if assignment:
         return {
-            "question_1": cfg.question_1,
-            "question_2": cfg.question_2,
-            "question_3": cfg.question_3,
-            "hint_1": cfg.hint_1 or "",
-            "hint_2": cfg.hint_2 or "",
-            "hint_3": cfg.hint_3 or "",
+            "question_1": getattr(assignment, "reflection_q1", None) or DEFAULT_REFLECTION_QUESTIONS["question_1"],
+            "question_2": getattr(assignment, "reflection_q2", None) or DEFAULT_REFLECTION_QUESTIONS["question_2"],
+            "question_3": getattr(assignment, "reflection_q3", None) or DEFAULT_REFLECTION_QUESTIONS["question_3"],
         }
-    return {k: (v or "") for k, v in DEFAULT_REFLECTION_QUESTIONS.items()}
+    return {
+        "question_1": DEFAULT_REFLECTION_QUESTIONS["question_1"],
+        "question_2": DEFAULT_REFLECTION_QUESTIONS["question_2"],
+        "question_3": DEFAULT_REFLECTION_QUESTIONS["question_3"],
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -158,8 +159,6 @@ def dashboard():
     deep_count = sum(1 for r in rows if r["depth_label"] == "deep")
     reflection_count = Reflection.query.filter_by(assignment_id=assignment.id).count()
 
-    reflection_config = _get_reflection_config(assignment.id)
-
     return render_template(
         "instructor/dashboard.html",
         course=course,
@@ -169,8 +168,6 @@ def dashboard():
         avg_exchanges=avg_exchanges,
         deep_count=deep_count,
         reflection_count=reflection_count,
-        reflection_config=reflection_config,
-        default_questions=DEFAULT_REFLECTION_QUESTIONS,
     )
 
 
@@ -213,6 +210,24 @@ def save_ai_config(assignment_id):
     assignment.supplementary_instructions = data.get("supplementary_instructions", "").strip()
     db.session.commit()
     return jsonify({"success": True, "message": "AI configuration saved"})
+
+
+@instructor_bp.route("/assignment/<int:assignment_id>/save-reflection-questions", methods=["POST"])
+def save_reflection_questions(assignment_id):
+    assignment = Assignment.query.get_or_404(assignment_id)
+    data = request.get_json(silent=True) or {}
+    q1 = data.get("reflection_q1", "").strip()
+    q2 = data.get("reflection_q2", "").strip()
+    q3 = data.get("reflection_q3", "").strip()
+    if not q1 or not q2 or not q3:
+        return jsonify({"error": "All three questions are required."}), 400
+    db.session.expire(assignment)
+    assignment = Assignment.query.get(assignment_id)
+    assignment.reflection_q1 = q1
+    assignment.reflection_q2 = q2
+    assignment.reflection_q3 = q3
+    db.session.commit()
+    return jsonify({"success": True, "message": "Reflection questions saved"})
 
 
 @instructor_bp.route("/assignment-config", methods=["POST"])

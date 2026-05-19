@@ -58,6 +58,10 @@ class Assignment(db.Model):
     supplementary_instructions = db.Column(db.Text, nullable=False, default="")
     max_score = db.Column(db.Float, nullable=False, default=100)
 
+    reflection_q1 = db.Column(db.Text, nullable=False, default="Looking back at your conversation, what is the most important idea you developed that you want to carry into your assignment?")
+    reflection_q2 = db.Column(db.Text, nullable=False, default="Where did your own knowledge or course concepts most change the direction of the conversation?")
+    reflection_q3 = db.Column(db.Text, nullable=False, default="What is your plan for the assignment — what will you argue, design, or create? And which specific moment in your conversation most directly shaped that plan?")
+
     course = db.relationship("Course", back_populates="assignments")
     exchanges = db.relationship("PromptExchange", back_populates="assignment")
     reflections = db.relationship("Reflection", back_populates="assignment")
