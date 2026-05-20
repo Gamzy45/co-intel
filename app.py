@@ -337,6 +337,7 @@ def _migrate():
         ("assignments", "reflection_q1",             "TEXT NOT NULL DEFAULT 'Looking back at your conversation, what is the most important idea you developed that you want to carry into your assignment?'"),
         ("assignments", "reflection_q2",             "TEXT NOT NULL DEFAULT 'Where did your own knowledge or course concepts most change the direction of the conversation?'"),
         ("assignments", "reflection_q3",             "TEXT NOT NULL DEFAULT 'What is your plan for the assignment — what will you argue, design, or create? And which specific moment in your conversation most directly shaped that plan?'"),
+        ("session_summaries", "reflection_summary_json", "TEXT"),
     ]
     with db.engine.connect() as conn:
         for table, col, col_def in new_cols:

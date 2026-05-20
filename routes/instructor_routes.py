@@ -10,7 +10,7 @@ from models.models import (
     PromptExchange, Reflection, ReflectionConfig, SessionSummary, Student,
 )
 from services.ai_service import score_engagement, analyze_assignment_authorship
-from services.archetype_service import generate_session_summary
+from services.archetype_service import generate_session_summary, generate_reflection_summary
 from config import MODALITY_SECTIONS, DEFAULT_REFLECTION_QUESTIONS
 
 instructor_bp = Blueprint("instructor", __name__, url_prefix="/instructor")
@@ -448,6 +448,21 @@ def assessment(student_id):
             print(f"[assessment] session summary generation error: {exc}")
 
     session_summary = json.loads(summary_rec.summary_json) if summary_rec else None
+
+    # Load or generate reflection summary (four criteria adapted for reflection)
+    reflection_summary = None
+    if summary_rec and summary_rec.reflection_summary_json:
+        reflection_summary = json.loads(summary_rec.reflection_summary_json)
+    else:
+        reflection_rec = Reflection.query.filter_by(
+            student_id=student_id, assignment_id=assignment.id
+        ).first()
+        if reflection_rec and reflection_rec.question_1:
+            try:
+                reflection_summary = generate_reflection_summary(student_id, assignment.id)
+            except Exception as exc:
+                print(f"[assessment] reflection summary generation error: {exc}")
+
     feedback = InstructorFeedback.query.filter_by(
         student_id=student_id, assignment_id=assignment.id
     ).first()
@@ -459,6 +474,7 @@ def assessment(student_id):
         student=student,
         score=score_rec,
         session_summary=session_summary,
+        reflection_summary=reflection_summary,
         generating=(score_rec is None),
         feedback=feedback,
     )
@@ -553,6 +569,25 @@ def regenerate_summary(student_id):
 
     try:
         generate_session_summary(student_id, assignment.id)
+        return jsonify({"success": True})
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 502
+
+
+@instructor_bp.route("/student/<int:student_id>/assessment/regenerate-reflection-summary", methods=["POST"])
+def regenerate_reflection_summary(student_id):
+    student = Student.query.get_or_404(student_id)
+    _, assignment = _get_base_for_student(student)
+
+    summary_rec = SessionSummary.query.filter_by(
+        student_id=student_id, assignment_id=assignment.id
+    ).first()
+    if summary_rec:
+        summary_rec.reflection_summary_json = None
+        db.session.commit()
+
+    try:
+        generate_reflection_summary(student_id, assignment.id)
         return jsonify({"success": True})
     except Exception as exc:
         return jsonify({"error": str(exc)}), 502

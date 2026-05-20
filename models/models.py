@@ -182,6 +182,7 @@ class SessionSummary(db.Model):
     student_id = db.Column(db.Integer, db.ForeignKey("students.id"), nullable=False)
     assignment_id = db.Column(db.Integer, db.ForeignKey("assignments.id"), nullable=False)
     summary_json = db.Column(db.Text, nullable=True)
+    reflection_summary_json = db.Column(db.Text, nullable=True)
     generated_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     student = db.relationship("Student")

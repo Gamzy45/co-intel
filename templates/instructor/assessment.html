@@ -117,37 +117,36 @@
 
 <!-- TAB 2: Reflection -->
 <div class="tab-panel" id="tab-reflection">
-  <div class="metric-grid-3">
-    <div class="metric-card">
-      <div class="metric-label">Q1 score</div>
-      <div class="metric-val">{{ score.reflection_q1_score if score.reflection_q1_score is not none else '—' }}</div>
-      <div class="metric-sub">course knowledge</div>
-    </div>
-    <div class="metric-card">
-      <div class="metric-label">Q2 score</div>
-      <div class="metric-val">{{ score.reflection_q2_score if score.reflection_q2_score is not none else '—' }}</div>
-      <div class="metric-sub">changed thinking</div>
-    </div>
-    <div class="metric-card">
-      <div class="metric-label">Q3 score</div>
-      <div class="metric-val">{{ score.reflection_q3_score if score.reflection_q3_score is not none else '—' }}</div>
-      <div class="metric-sub">personal knowledge</div>
-    </div>
+  <div style="display:flex;justify-content:flex-end;margin-bottom:10px;">
+    <button class="btn" id="regen-reflection-btn" onclick="regenerateReflectionSummary()">Regenerate reflection assessment</button>
   </div>
+  {% if reflection_summary and reflection_summary.criteria_scores %}
   <div class="card">
+    {% for cs in reflection_summary.criteria_scores %}
+    {% set score_val = cs.get('score', 0) %}
     <div class="ring-wrap">
-      <div class="score-ring" style="--pct:{{ score.reflection_q1_score or 0 }};"><span class="score-ring-val">{{ score.reflection_q1_score or '—' }}</span></div>
-      <div><div class="ring-label">Q1 — How did course knowledge shape AI direction?</div><div class="ring-feedback">{{ score.reflection_q1_feedback or 'No feedback available.' }}</div></div>
+      <div class="score-ring" style="--pct:{{ score_val }};"><span class="score-ring-val">{{ score_val }}</span></div>
+      <div>
+        <div class="ring-label">{{ cs.criterion_name }}</div>
+        <div style="margin-bottom:4px;">
+          {% if cs.level == 'completed' %}
+          <span style="display:inline-block;font-size:10px;font-weight:500;padding:2px 8px;border-radius:20px;background:var(--bg-orange-light);color:var(--text-orange);">Completed</span>
+          {% elif cs.level == 'developing' %}
+          <span style="display:inline-block;font-size:10px;font-weight:500;padding:2px 8px;border-radius:20px;background:#FEF3E2;color:#92580a;">Developing</span>
+          {% else %}
+          <span style="display:inline-block;font-size:10px;font-weight:500;padding:2px 8px;border-radius:20px;background:var(--bg-surface);color:var(--text-tertiary);">Needs work</span>
+          {% endif %}
+        </div>
+        <div class="ring-feedback">{{ cs.evidence or '' }}</div>
+      </div>
     </div>
-    <div class="ring-wrap">
-      <div class="score-ring" style="--pct:{{ score.reflection_q2_score or 0 }};"><span class="score-ring-val">{{ score.reflection_q2_score or '—' }}</span></div>
-      <div><div class="ring-label">Q2 — How did working with AI change or deepen thinking?</div><div class="ring-feedback">{{ score.reflection_q2_feedback or 'No feedback available.' }}</div></div>
-    </div>
-    <div class="ring-wrap">
-      <div class="score-ring" style="--pct:{{ score.reflection_q3_score or 0 }};"><span class="score-ring-val">{{ score.reflection_q3_score or '—' }}</span></div>
-      <div><div class="ring-label">Q3 — Where did the student disagree with AI?</div><div class="ring-feedback">{{ score.reflection_q3_feedback or 'No feedback available.' }}</div></div>
-    </div>
+    {% endfor %}
   </div>
+  {% else %}
+  <div class="card" style="text-align:center;padding:40px 0;color:var(--text-tertiary);font-size:12px;">
+    No reflection submitted yet — criteria assessment will appear once the student submits their reflection.
+  </div>
+  {% endif %}
 </div>
 
 <!-- TAB 3: Overall -->
@@ -233,6 +232,30 @@
 </script>
 {% else %}
 <script>
+  async function regenerateReflectionSummary() {
+    const btn = document.getElementById('regen-reflection-btn');
+    const orig = btn.textContent;
+    btn.textContent = 'Regenerating…';
+    btn.disabled = true;
+    try {
+      const resp = await fetch(
+        '{{ url_for("instructor.regenerate_reflection_summary", student_id=student.id) }}',
+        { method: 'POST', headers: { 'X-CSRFToken': getCsrfToken() } }
+      );
+      const data = await resp.json();
+      if (data.success) {
+        location.reload();
+      } else {
+        btn.textContent = orig;
+        btn.disabled = false;
+        alert('Error: ' + (data.error || 'Regeneration failed.'));
+      }
+    } catch (err) {
+      btn.textContent = orig;
+      btn.disabled = false;
+    }
+  }
+
   async function regenerateSummary() {
     const btn = document.getElementById('regen-btn');
     const orig = btn.textContent;

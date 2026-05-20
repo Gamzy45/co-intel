@@ -222,6 +222,16 @@ def _fallback_summary(note: str) -> dict:
     }
 
 
+def _to_second_person(text: str) -> str:
+    if not isinstance(text, str):
+        return text
+    text = re.sub(r'\bThe student\b', 'You', text)
+    text = re.sub(r'\bthe student\b', 'you', text)
+    text = re.sub(r'\bStudent\b', 'You', text)
+    text = re.sub(r'\bstudent\b', 'you', text)
+    return text
+
+
 def generate_session_summary(student_id: int, assignment_id: int) -> dict:
     """Generate and cache an AI-scored session summary using universal criteria."""
     from models.models import PromptExchange, Assignment, SessionSummary
@@ -295,15 +305,6 @@ def generate_session_summary(student_id: int, assignment_id: int) -> dict:
     except Exception as exc:
         result = _fallback_summary(str(exc))
 
-    def _to_second_person(text: str) -> str:
-        if not isinstance(text, str):
-            return text
-        text = re.sub(r'\bThe student\b', 'You', text)
-        text = re.sub(r'\bthe student\b', 'you', text)
-        text = re.sub(r'\bStudent\b', 'You', text)
-        text = re.sub(r'\bstudent\b', 'you', text)
-        return text
-
     for cs in result.get("criteria_scores", []):
         cs["evidence"] = _to_second_person(cs.get("evidence", ""))
     for km in result.get("key_moments", []):
@@ -339,4 +340,78 @@ def generate_session_summary(student_id: int, assignment_id: int) -> dict:
     db.session.commit()
 
     result["generated_at"] = now.strftime("%H:%M")
+    return result
+
+
+def generate_reflection_summary(student_id: int, assignment_id: int) -> dict:
+    """Score the student's reflection answers against the four universal criteria adapted for reflection context."""
+    from models.models import Reflection, Assignment, SessionSummary
+    from extensions import db
+
+    assignment = Assignment.query.get(assignment_id)
+    if not assignment:
+        return {"criteria_scores": []}
+
+    reflection = Reflection.query.filter_by(
+        student_id=student_id, assignment_id=assignment_id
+    ).first()
+
+    if not reflection or not any([reflection.question_1, reflection.question_2, reflection.question_3]):
+        return {"criteria_scores": []}
+
+    reflection_text = (
+        f"Q1: {reflection.question_1 or ''}\n\n"
+        f"Q2: {reflection.question_2 or ''}\n\n"
+        f"Q3: {reflection.question_3 or ''}"
+    )
+
+    criteria_names = [c["criterion_name"] for c in UNIVERSAL_CRITERIA]
+
+    scoring_prompt = (
+        f"Evaluate the following student reflection against the four criteria below.\n\n"
+        f"Intellectual ownership: did the student identify ideas in the reflection that are genuinely "
+        f"their own rather than restating AI output from the conversation.\n\n"
+        f"Depth of elaboration: did the student go beyond surface observations and develop their "
+        f"reflective thinking with specificity and nuance.\n\n"
+        f"Critical evaluation: did the student honestly assess both the strengths and limitations of "
+        f"their own thinking and their AI interaction.\n\n"
+        f"Knowledge application: did the student connect course concepts or disciplinary knowledge to "
+        f"what they developed in the conversation and their assignment plan.\n\n"
+        f"Score each criterion from 0 to 100 and assign a level of needs work, developing, or completed. "
+        f"Base all scores entirely on what the student actually wrote in their reflection answers.\n\n"
+        f"=== Student Reflection ===\n{reflection_text}\n\n"
+        f"IMPORTANT: Write all evidence sentences in second person, addressing the student directly as 'you'. "
+        f"For example: 'You identified an original insight that was not present in the AI conversation.' "
+        f"Never write 'the student' or 'student' in any evidence or description field.\n\n"
+        f"Return only valid JSON with no other text. The JSON must have exactly this field:\n"
+        f"- criteria_scores: array of 4 objects each with criterion_name, level (\"needs work\", \"developing\", "
+        f"or \"completed\"), score (0-100), evidence (one sentence in second person)\n\n"
+        f"Criterion names must match exactly: {', '.join(criteria_names)}"
+    )
+
+    api_key = os.getenv("ANTHROPIC_API_KEY", "")
+    client = anthropic.Anthropic(api_key=api_key)
+
+    try:
+        response = client.messages.create(
+            model=MODEL,
+            max_tokens=1000,
+            messages=[{"role": "user", "content": scoring_prompt}],
+        )
+        raw = response.content[0].text.strip()
+        cleaned = raw.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+        result = json.loads(cleaned)
+    except Exception as exc:
+        result = {"criteria_scores": [], "_note": f"Scoring could not be completed. {exc}"}
+
+    for cs in result.get("criteria_scores", []):
+        cs["evidence"] = _to_second_person(cs.get("evidence", ""))
+
+    summary_rec = SessionSummary.query.filter_by(
+        student_id=student_id, assignment_id=assignment_id
+    ).first()
+    if summary_rec:
+        summary_rec.reflection_summary_json = json.dumps(result)
+        db.session.commit()
+
     return result

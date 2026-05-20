@@ -1069,15 +1069,6 @@
         <div class="criteria-evidence">${escHtml(cs.evidence || '')}</div>
       </div>`).join('');
 
-    const threads = (data.threads || []).map((t, i) => `
-      <div class="thread-row">
-        <div class="thread-num">${i + 1}</div>
-        <div>
-          <div class="thread-text">${escHtml(t.text || '')}</div>
-          <div class="thread-source">${escHtml(t.source || '')}</div>
-        </div>
-      </div>`).join('');
-
     const generatedAt = data.generated_at
       ? `<div style="font-size:11px;color:var(--text-tertiary);margin-bottom:12px;">Updated at ${escHtml(data.generated_at)}</div>`
       : '';
@@ -1095,15 +1086,8 @@
           ${keyMoments || '<div style="font-size:12px;color:var(--text-tertiary);">No key moments identified.</div>'}
         </div>
 
-        <div class="summary-section">
-          <div class="summary-section-title">Three threads to carry forward</div>
-          ${threads || '<div style="font-size:12px;color:var(--text-tertiary);">No threads identified.</div>'}
-        </div>
-
         <div class="summary-footer">
           <a href="{{ url_for('student.reflection') }}" class="btn btn-primary">Go to reflection</a>
-          <button class="btn" onclick="window.print()">Save notes</button>
-          <button class="btn" onclick="document.getElementById('session-summary-wrap').style.display='none'">Close</button>
         </div>
       </div>`;
   }
